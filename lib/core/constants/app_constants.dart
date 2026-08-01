@@ -25,6 +25,8 @@ abstract final class AppConstants {
   static const String lastReadAyahPrefKey = 'last_read_ayah';
   static const String quranBookmarkPrefKey = 'quran_bookmark_page';
   static const String sebhaCountPrefKey = 'sebha_count';
+  static const String sebhaTotalRoundsPrefKey = 'sebha_total_rounds';
+  static const String sebhaDhikrIndexPrefKey = 'sebha_dhikr_index';
   static const String azkarProgressPrefKey = 'azkar_progress';
 
   // ─── Hive Boxes ──────────────────────────────────────────────────────────────
@@ -47,6 +49,18 @@ abstract final class AppConstants {
   // ─── Sebha ───────────────────────────────────────────────────────────────────
   static const int defaultSebhaTarget = 33;
   static const List<int> sebhaPresets = [33, 66, 99, 100];
+
+  /// The default set of dhikr phrases cycled through in the Sebha.
+  static const List<String> defaultDhikrs = [
+    'سُبْحَانَ الله',
+    'الْحَمْدُ لِلَّهِ',
+    'اللهُ أَكْبَرُ',
+    'أَسْتَغْفِرُ الله',
+    'لَا إِلَهَ إِلَّا الله',
+    'سُبْحَانَ اللهِ وَبِحَمْدِهِ',
+    'سُبْحَانَ اللهِ الْعَظِيمِ',
+    'لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِالله',
+  ];
 
   // ─── Layout ──────────────────────────────────────────────────────────────────
   static const double defaultPagePadding = 16.0;
