@@ -20,8 +20,10 @@ abstract final class AppConstants {
   static const String themeModePrefKey = 'theme_mode';
   static const String fontSizePrefKey = 'font_size';
   static const String quranPageBackgroundPrefKey = 'quran_page_background';
+  static const String lastReadPagePrefKey = 'last_read_page';
   static const String lastReadSurahPrefKey = 'last_read_surah';
   static const String lastReadAyahPrefKey = 'last_read_ayah';
+  static const String quranBookmarkPrefKey = 'quran_bookmark_page';
   static const String sebhaCountPrefKey = 'sebha_count';
   static const String azkarProgressPrefKey = 'azkar_progress';
 

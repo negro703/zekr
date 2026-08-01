@@ -2,6 +2,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants/constants.dart';
+import 'key_value_storage.dart';
 
 /// Central local storage service managing both Hive boxes and
 /// SharedPreferences key-value storage.
@@ -10,7 +11,7 @@ import '../../constants/constants.dart';
 ///   sebha state) stored in strongly-typed boxes.
 /// - SharedPreferences: Used for lightweight app settings (theme mode,
 ///   font size, notification preferences).
-class LocalStorageService {
+class LocalStorageService implements KeyValueStorage {
   LocalStorageService._internal();
 
   static final LocalStorageService instance = LocalStorageService._internal();
@@ -39,30 +40,37 @@ class LocalStorageService {
   // ─── SharedPreferences (App Settings) ───────────────────────────────────────
 
   /// Reads a [String] setting by [key], or [defaultValue] if absent.
+  @override
   String? getString(String key, {String? defaultValue}) =>
       _prefs?.getString(key) ?? defaultValue;
 
   /// Writes a [String] setting by [key].
+  @override
   Future<void> setString(String key, String value) =>
       _prefs?.setString(key, value) ?? Future.value();
 
   /// Reads an [int] setting by [key], or [defaultValue] if absent.
+  @override
   int? getInt(String key, {int? defaultValue}) =>
       _prefs?.getInt(key) ?? defaultValue;
 
   /// Writes an [int] setting by [key].
+  @override
   Future<void> setInt(String key, int value) =>
       _prefs?.setInt(key, value) ?? Future.value();
 
   /// Reads a [bool] setting by [key], or [defaultValue] if absent.
+  @override
   bool? getBool(String key, {bool? defaultValue}) =>
       _prefs?.getBool(key) ?? defaultValue;
 
   /// Writes a [bool] setting by [key].
+  @override
   Future<void> setBool(String key, bool value) =>
       _prefs?.setBool(key, value) ?? Future.value();
 
   /// Removes a setting by [key].
+  @override
   Future<void> remove(String key) => _prefs?.remove(key) ?? Future.value();
 
   /// Clears all SharedPreferences settings.
