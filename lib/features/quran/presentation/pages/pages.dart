@@ -1,0 +1,1 @@
+export 'quran_reader_page.dart';
