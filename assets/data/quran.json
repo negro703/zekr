@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "name": "Zekr Quran Dataset (Development Sample)",
+    "script": "Uthmani",
+    "totalPages": 604,
+    "note": "Development sample containing pages 1-2. Replace with the full 604-page Uthmani script dataset for production."
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "juzNumber": 1,
+      "surahName": "سُورَةُ الفَاتِحَة",
+      "ayahs": [
+        {
+          "id": 1,
+          "surahNumber": 1,
+          "surahName": "سُورَةُ الفَاتِحَة",
+          "ayahNumber": 1,
+          "juzNumber": 1,
+          "pageNumber": 1,
+          "text": "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+        },
+        {
+          "id": 2,
+          "surahNumber": 1,
+          "surahName": "سُورَةُ الفَاتِحَة",
+          "ayahNumber": 2,
+          "juzNumber": 1,
+          "pageNumber": 1,
+          "text": "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ"
+        },
+        {
+          "id": 3,
+          "surahNumber": 1,
+          "surahName": "سُورَةُ الفَاتِحَة",
+          "ayahNumber": 3,
+          "juzNumber": 1,
+          "pageNumber": 1,
+          "text": "الرَّحْمَٰنِ الرَّحِيمِ"
+        },
+        {
+          "id": 4,
+          "surahNumber": 1,
+          "surahName": "سُورَةُ الفَاتِحَة",
+          "ayahNumber": 4,
+          "juzNumber": 1,
+          "pageNumber": 1,
+          "text": "مَالِكِ يَوْمِ الدِّينِ"
+        },
+        {
+          "id": 5,
+          "surahNumber": 1,
+          "surahName": "سُورَةُ الفَاتِحَة",
+          "ayahNumber": 5,
+          "juzNumber": 1,
+          "pageNumber": 1,
+          "text": "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ"
+        },
+        {
+          "id": 6,
+          "surahNumber": 1,
+          "surahName": "سُورَةُ الفَاتِحَة",
+          "ayahNumber": 6,
+          "juzNumber": 1,
+          "pageNumber": 1,
+          "text": "اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ"
+        },
+        {
+          "id": 7,
+          "surahNumber": 1,
+          "surahName": "سُورَةُ الفَاتِحَة",
+          "ayahNumber": 7,
+          "juzNumber": 1,
+          "pageNumber": 1,
+          "text": "صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ الْمَغْضُوبِ عَلَيْهِمْ وَلَا الضَّالِّينَ"
+        }
+      ]
+    },
+    {
+      "pageNumber": 2,
+      "juzNumber": 1,
+      "surahName": "سُورَةُ البَقَرَة",
+      "ayahs": [
+        {
+          "id": 8,
+          "surahNumber": 2,
+          "surahName": "سُورَةُ البَقَرَة",
+          "ayahNumber": 1,
+          "juzNumber": 1,
+          "pageNumber": 2,
+          "text": "الم"
+        },
+        {
+          "id": 9,
+          "surahNumber": 2,
+          "surahName": "سُورَةُ البَقَرَة",
+          "ayahNumber": 2,
+          "juzNumber": 1,
+          "pageNumber": 2,
+          "text": "ذَٰلِكَ الْكِتَابُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى لِّلْمُتَّقِينَ"
+        },
+        {
+          "id": 10,
+          "surahNumber": 2,
+          "surahName": "سُورَةُ البَقَرَة",
+          "ayahNumber": 3,
+          "juzNumber": 1,
+          "pageNumber": 2,
+          "text": "الَّذِينَ يُؤْمِنُونَ بِالْغَيْبِ وَيُقِيمُونَ الصَّلَاةَ وَمِمَّا رَزَقْنَاهُمْ يُنفِقُونَ"
+        },
+        {
+          "id": 11,
+          "surahNumber": 2,
+          "surahName": "سُورَةُ البَقَرَة",
+          "ayahNumber": 4,
+          "juzNumber": 1,
+          "pageNumber": 2,
+          "text": "وَالَّذِينَ يُؤْمِنُونَ بِمَا أُنزِلَ إِلَيْكَ وَمَا أُنزِلَ مِن قَبْلِكَ وَبِالْآخِرَةِ هُمْ يُوقِنُونَ"
+        },
+        {
+          "id": 12,
+          "surahNumber": 2,
+          "surahName": "سُورَةُ البَقَرَة",
+          "ayahNumber": 5,
+          "juzNumber": 1,
+          "pageNumber": 2,
+          "text": "أُولَٰئِكَ عَلَىٰ هُدًى مِّن رَّبِّهِمْ ۖ وَأُولَٰئِكَ هُمُ الْمُفْلِحُونَ"
+        }
+      ]
+    }
+  ]
+}
