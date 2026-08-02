@@ -28,6 +28,18 @@ abstract final class AppConstants {
   static const String sebhaTotalRoundsPrefKey = 'sebha_total_rounds';
   static const String sebhaDhikrIndexPrefKey = 'sebha_dhikr_index';
   static const String azkarProgressPrefKey = 'azkar_progress';
+  static const String morningAzkarEnabledPrefKey = 'morning_azkar_enabled';
+  static const String morningAzkarHourPrefKey = 'morning_azkar_hour';
+  static const String morningAzkarMinutePrefKey = 'morning_azkar_minute';
+  static const String eveningAzkarEnabledPrefKey = 'evening_azkar_enabled';
+  static const String eveningAzkarHourPrefKey = 'evening_azkar_hour';
+  static const String eveningAzkarMinutePrefKey = 'evening_azkar_minute';
+  static const String salawatEnabledPrefKey = 'salawat_enabled';
+  static const String salawatIntervalHoursPrefKey = 'salawat_interval_hours';
+  static const String salawatIntervalIdPrefKey = 'salawat_interval_id';
+  static const int defaultMorningHour = 6;
+  static const int defaultEveningHour = 17;
+  static const int defaultSalawatIntervalHours = 1;
 
   // ─── Hive Boxes ──────────────────────────────────────────────────────────────
   static const String settingsBox = 'settings_box';
