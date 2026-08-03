@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/core.dart';
+import 'features/home/home.dart';
 
 Future<void> main() async {
   // Ensure Flutter bindings are initialized before any async work.
@@ -35,6 +36,7 @@ Future<void> main() async {
 /// - RTL layout via Arabic locale
 /// - Light/Dark themes with Islamic aesthetic
 /// - Material 3 design system
+/// - Home navigation shell (Quran, Azkar, Sebha, Settings)
 class ZekrApp extends StatelessWidget {
   const ZekrApp({super.key});
 
@@ -71,59 +73,8 @@ class ZekrApp extends StatelessWidget {
         );
       },
 
-      // ─── Home ────────────────────────────────────────────────────────────────
-      // Phase 1 placeholder home. Feature navigation will be implemented
-      // in upcoming phases (Quran Reader, Sebha, Azkar).
-      home: const _HomePlaceholder(),
-    );
-  }
-}
-
-/// Temporary placeholder home screen for Phase 1.
-///
-/// Will be replaced with the main navigation shell in a future phase.
-class _HomePlaceholder extends StatelessWidget {
-  const _HomePlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(AppConstants.appNameArabic),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Simple Islamic geometric ornament placeholder symbol
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: colorScheme.primary, width: 3),
-              ),
-              child: Icon(
-                Icons.auto_awesome,
-                size: 48,
-                color: colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'مرحباً بك في تطبيق ذكر',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'البنية الأساسية جاهزة ✅',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
-        ),
-      ),
+      // ─── Home: Navigation Shell ──────────────────────────────────────────────
+      home: const HomePage(),
     );
   }
 }

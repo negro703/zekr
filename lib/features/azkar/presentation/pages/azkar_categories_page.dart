@@ -11,8 +11,30 @@ import 'azkar_details_page.dart';
 ///
 /// Material 3 Islamic styling with emerald/gold/ivory tones and
 /// full RTL layout.
-class AzkarCategoriesPage extends StatelessWidget {
+///
+/// Loads categories automatically on first mount so the UI transitions
+/// from [AzkarInitial] → [AzkarCategoriesLoading] → [AzkarCategoriesLoaded]
+/// instead of hanging on the loading indicator forever.
+class AzkarCategoriesPage extends StatefulWidget {
   const AzkarCategoriesPage({super.key});
+
+  @override
+  State<AzkarCategoriesPage> createState() => _AzkarCategoriesPageState();
+}
+
+class _AzkarCategoriesPageState extends State<AzkarCategoriesPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Kick off the category load on the first frame so the cubit
+    // transitions out of AzkarInitial and resolves the loading spinner.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cubit = context.read<AzkarCubit>();
+      if (cubit.state is AzkarInitial) {
+        cubit.loadCategories();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,12 +111,18 @@ class _CategoryCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final primaryColor = isDark ? AppColors.emeraldLight : AppColors.emerald;
+    final title = category.title;
+    final iconName = category.icon;
+    final description = category.description;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
+          // Navigate to the azkar list for this category.
+          // The AzkarCubit provided by HomePage's BlocProvider is
+          // inherited by this new route automatically.
           Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => AzkarDetailsPage(category: category),
@@ -126,27 +154,27 @@ class _CategoryCard extends StatelessWidget {
                   height: 56,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _iconFor(category.icon).withValues(alpha: 0.12),
+                    color: _iconColor(iconName).withValues(alpha: 0.12),
                   ),
                   child: Icon(
-                    _mapIcon(category.icon),
+                    _mapIcon(iconName),
                     color: primaryColor,
                     size: 28,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  category.title,
+                  title,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
-                if (category.description != null) ...[
+                if (description != null) ...[
                   const SizedBox(height: 4),
                   Text(
-                    category.description!,
+                    description,
                     textAlign: TextAlign.center,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -163,7 +191,7 @@ class _CategoryCard extends StatelessWidget {
     );
   }
 
-  Color _iconFor(String iconName) {
+  Color _iconColor(String iconName) {
     switch (iconName) {
       case 'wb_sunny':
         return AppColors.gold;

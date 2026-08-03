@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/constants.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/theme/theme.dart';
+import '../../../../core/utils/quran_page_metadata.dart';
 import '../../domain/entities/entities.dart';
 import '../bloc/quran_cubit.dart';
 import '../bloc/quran_state.dart';
@@ -230,11 +231,13 @@ class _QuranPageView extends StatelessWidget {
     );
   }
 
-  /// Creates a minimal placeholder page when the entity isn't loaded yet.
+  /// Creates a placeholder page for any Mushaf page (1–604) that isn't
+  /// present in the loaded JSON dataset. Uses the canonical Juz mapping
+  /// so the footer always shows the correct Juz number.
   QuranPageEntity _placeholderPage(int pageNumber, QuranLoaded loaded) {
     return QuranPageEntity(
       pageNumber: pageNumber,
-      juzNumber: 1,
+      juzNumber: juzForPage(pageNumber),
       surahName: null,
       ayahs: const [],
     );

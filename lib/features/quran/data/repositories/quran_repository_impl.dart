@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 
 import '../../../../core/errors/errors.dart';
+import '../../../../core/utils/quran_page_metadata.dart';
 import '../../domain/entities/entities.dart';
 import '../../domain/repositories/quran_repository.dart';
 import '../models/models.dart';
@@ -17,15 +18,15 @@ import '../models/models.dart';
 ///   O(1) lookup — no repeated file I/O during PageView scrolling.
 /// - **Batch loading**: [getPagesInRange] supports pre-loading adjacent
 ///   pages without re-parsing the full dataset.
-/// - **Bismillah caching**: Repeated surah name lookups are memoized.
 class QuranRepositoryImpl implements QuranRepository {
   QuranRepositoryImpl({this.assetPath = defaultAssetPath});
 
-  /// Default path to the Quran JSON asset (pages 1–604).
+  /// Default path to the Quran JSON asset (sample pages 1–604).
   ///
   /// Expected structure:
   /// ```json
   /// {
+  ///   "meta": { "totalPages": 604 },
   ///   "pages": [
   ///     {
   ///       "pageNumber": 1,
@@ -60,7 +61,21 @@ class QuranRepositoryImpl implements QuranRepository {
   @override
   Future<QuranPageEntity?> getPage(int pageNumber) async {
     final pages = await _loadAllPages();
-    return pages[pageNumber];
+    final page = pages[pageNumber];
+    if (page != null) return page;
+
+    // For valid Mushaf pages (1–604) that aren't present in the JSON
+    // sample dataset, return a structural placeholder with the correct
+    // Juz number so the reader footer renders accurately.
+    if (pageNumber >= 1 && pageNumber <= kTotalMushafPages) {
+      return QuranPageModel(
+        pageNumber: pageNumber,
+        juzNumber: juzForPage(pageNumber),
+        surahName: null,
+        ayahs: const [],
+      );
+    }
+    return null; // Outside the 604-page Mushaf range.
   }
 
   @override
@@ -88,11 +103,10 @@ class QuranRepositoryImpl implements QuranRepository {
   @override
   Future<int> getTotalPages() async {
     if (_totalPages != null) return _totalPages!;
-    final pages = await _loadAllPages();
-    // Only fall back to the loaded page count if the dataset metadata
-    // did not declare a total.
-    _totalPages ??= pages.length;
-    return _totalPages!;
+    await _loadAllPages();
+    // Fall back to the canonical Mushaf page count if the dataset
+    // did not declare one.
+    return _totalPages ?? kTotalMushafPages;
   }
 
   // ─── Internal Helpers ────────────────────────────────────────────────────────

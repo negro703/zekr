@@ -6,6 +6,9 @@ import '../../../../core/services/services.dart';
 import '../../../../core/theme/theme.dart';
 import '../bloc/quran_cubit.dart';
 import '../bloc/quran_state.dart';
+import '../pages/bookmarks_page.dart';
+import '../pages/quran_index_page.dart';
+import 'tafseer_bottom_sheet.dart';
 
 /// Advanced Drawer for the Quran Reader.
 ///
@@ -78,12 +81,24 @@ class QuranDrawer extends StatelessWidget {
                       _QuranDrawerTile(
                         icon: Icons.translate,
                         title: 'معاني الكلمات',
-                        onTap: () => _showComingSoon(context, 'معاني الكلمات'),
+                        enabled: currentPage != null,
+                        onTap: () {
+                          if (currentPage != null) {
+                            Navigator.of(context).pop();
+                            TafseerBottomSheet.show(context, currentPage);
+                          }
+                        },
                       ),
                       _QuranDrawerTile(
                         icon: Icons.menu_book_outlined,
                         title: 'التفسير الميسر',
-                        onTap: () => _showComingSoon(context, 'التفسير الميسر'),
+                        enabled: currentPage != null,
+                        onTap: () {
+                          if (currentPage != null) {
+                            Navigator.of(context).pop();
+                            TafseerBottomSheet.show(context, currentPage);
+                          }
+                        },
                       ),
 
                       // ─── Navigation Section ───────────────────────────────────
@@ -94,12 +109,26 @@ class QuranDrawer extends StatelessWidget {
                       _QuranDrawerTile(
                         icon: Icons.list_alt_outlined,
                         title: 'الفهرس',
-                        onTap: () => _showComingSoon(context, 'الفهرس'),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const QuranIndexPage(),
+                            ),
+                          );
+                        },
                       ),
                       _QuranDrawerTile(
                         icon: Icons.grid_view_outlined,
                         title: 'الأجزاء',
-                        onTap: () => _showComingSoon(context, 'الأجزاء'),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const QuranIndexPage(),
+                            ),
+                          );
+                        },
                       ),
                       _QuranDrawerTile(
                         icon: Icons.pages_outlined,
@@ -146,7 +175,14 @@ class QuranDrawer extends StatelessWidget {
                       _QuranDrawerTile(
                         icon: Icons.bookmarks_outlined,
                         title: 'التحكم بالعلامات',
-                        onTap: () => _showComingSoon(context, 'التحكم بالعلامات'),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const BookmarksPage(),
+                            ),
+                          );
+                        },
                       ),
 
                       // ─── Extra Tools Section ──────────────────────────────────
@@ -181,15 +217,6 @@ class QuranDrawer extends StatelessWidget {
   }
 
   // ─── Sheet Helpers ─────────────────────────────────────────────────────────
-
-  void _showComingSoon(BuildContext context, String feature) {
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text('قريباً: $feature')),
-      );
-  }
 
   void _showVirtueSheet(BuildContext context) {
     showModalBottomSheet<void>(

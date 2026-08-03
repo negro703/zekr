@@ -13,8 +13,26 @@ import '../bloc/sebha_state.dart';
 /// - Dhikr phrase selector dropdown
 /// - Round counter and total rounds display
 /// - Full RTL layout matching the Islamic Material 3 theme
-class SebhaPage extends StatelessWidget {
+class SebhaPage extends StatefulWidget {
   const SebhaPage({super.key});
+
+  @override
+  State<SebhaPage> createState() => _SebhaPageState();
+}
+
+class _SebhaPageState extends State<SebhaPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Kick off the sebha load on the first frame so the cubit
+    // transitions out of SebhaInitial and resolves the loading spinner.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cubit = context.read<SebhaCubit>();
+      if (cubit.state is SebhaInitial) {
+        cubit.loadSebha();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
