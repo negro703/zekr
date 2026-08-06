@@ -36,10 +36,14 @@ abstract final class AppConstants {
   static const String eveningAzkarMinutePrefKey = 'evening_azkar_minute';
   static const String salawatEnabledPrefKey = 'salawat_enabled';
   static const String salawatIntervalHoursPrefKey = 'salawat_interval_hours';
+  static const String salawatIntervalMinutesPrefKey = 'salawat_interval_minutes';
   static const String salawatIntervalIdPrefKey = 'salawat_interval_id';
   static const int defaultMorningHour = 6;
   static const int defaultEveningHour = 17;
   static const int defaultSalawatIntervalHours = 1;
+  static const int defaultSalawatIntervalMinutes = 60;
+  static const int minSalawatIntervalMinutes = 1;
+  static const int maxSalawatIntervalMinutes = 24 * 60;
 
   // ─── Hive Boxes ──────────────────────────────────────────────────────────────
   static const String settingsBox = 'settings_box';

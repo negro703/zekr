@@ -53,6 +53,9 @@ class _InMemoryStorage implements KeyValueStorage {
 /// - Trigger haptic feedback on each tap and when a zekr completes
 /// - Persist and restore tap progress across app restarts via
 ///   [KeyValueStorage]
+///
+/// All local-data access is wrapped in defensive try/catch blocks so a
+/// corrupted or missing persisted payload can never crash the UI.
 class AzkarCubit extends Cubit<AzkarState> {
   AzkarCubit({
     required this.repository,
@@ -72,6 +75,9 @@ class AzkarCubit extends Cubit<AzkarState> {
 
   /// Loads all Azkar categories.
   Future<void> loadCategories() async {
+    // Guard against redundant reloads.
+    if (state is AzkarCategoriesLoaded) return;
+
     emit(const AzkarCategoriesLoading());
 
     try {
@@ -87,19 +93,35 @@ class AzkarCubit extends Cubit<AzkarState> {
   /// Loads the azkar for a specific [categoryId].
   ///
   /// Also restores any previously persisted tap progress for this
-  /// category from [keyValueStorage].
+  /// category from [keyValueStorage] using a fully type-safe parser so
+  /// corrupted data is ignored instead of throwing.
   Future<void> loadAzkar(String categoryId) async {
+    // Ignore redundant loads of the same category.
+    final current = state;
+    if (current is AzkarLoaded && current.categoryId == categoryId) return;
+
     emit(AzkarLoading(categoryId: categoryId));
 
     try {
       final azkar = await repository.getAzkarByCategory(categoryId);
       final progress = _restoreProgress(categoryId);
-      emit(AzkarLoaded(
-        categoryId: categoryId,
-        azkar: azkar,
-        progress: progress,
-      ));
+
+      if (azkar.isEmpty) {
+        // Graceful empty state: emit loaded with an empty list so the
+        // UI can show a friendly "no azkar" message instead of crashing.
+        emit(AzkarLoaded(categoryId: categoryId, azkar: const []));
+        return;
+      }
+
+      emit(
+        AzkarLoaded(
+          categoryId: categoryId,
+          azkar: azkar,
+          progress: progress,
+        ),
+      );
     } catch (e) {
+      // Never propagate unexpected errors to the UI layer.
       emit(
         const AzkarError(message: 'تعذر تحميل الأذكار. حاول مرة أخرى.'),
       );
@@ -116,6 +138,7 @@ class AzkarCubit extends Cubit<AzkarState> {
     final loaded = state as AzkarLoaded;
     final zekr = _findZekr(loaded, zekrId);
     if (zekr == null) return;
+    if (zekr.count <= 0) return; // Defensive: avoid divide-by-zero.
 
     final current = loaded.countFor(zekrId);
     if (current >= zekr.count) return; // Already complete.
@@ -159,7 +182,11 @@ class AzkarCubit extends Cubit<AzkarState> {
     if (loaded.progress.isEmpty) return;
 
     emit(loaded.copyWith(progress: const {}));
-    keyValueStorage.remove(_progressKey(loaded.categoryId));
+    unawaited(
+      keyValueStorage.remove(_progressKey(loaded.categoryId)).catchError(
+            (_) {},
+          ),
+    );
   }
 
   /// Persists the current progress map for [categoryId].
@@ -172,13 +199,30 @@ class AzkarCubit extends Cubit<AzkarState> {
   }
 
   /// Restores the persisted progress map for [categoryId].
+  ///
+  /// Uses a fully type-safe parser:
+  /// - Non-string keys are skipped.
+  /// - Non-integer values are coerced to positive integers.
+  /// - Malformed JSON or storage failures return an empty map.
   Map<String, int> _restoreProgress(String categoryId) {
     try {
       final raw = keyValueStorage.getString(_progressKey(categoryId));
-      if (raw == null) return {};
+      if (raw == null || raw.isEmpty) return {};
+
       final decoded = json.decode(raw);
       if (decoded is! Map) return {};
-      return decoded.map((key, value) => MapEntry(key as String, value as int));
+
+      final result = <String, int>{};
+      for (final entry in decoded.entries) {
+        if (entry.key is! String) continue;
+        final value = entry.value;
+        if (value is int && value > 0) {
+          result[entry.key as String] = value;
+        } else if (value is num && value > 0) {
+          result[entry.key as String] = value.toInt();
+        }
+      }
+      return result;
     } catch (_) {
       return {};
     }

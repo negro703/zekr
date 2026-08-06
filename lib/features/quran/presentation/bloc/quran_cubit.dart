@@ -73,11 +73,8 @@ class QuranCubit extends Cubit<QuranState> {
           ? savedPage.clamp(1, _totalPages).toInt()
           : pages.first.pageNumber;
 
-      // Find the index of the restored page in the loaded list.
-      _currentPageIndex = pages.indexWhere((p) => p.pageNumber == restoredPage);
-      if (_currentPageIndex < 0) {
-        _currentPageIndex = 0;
-      }
+      // Map the restored Mushaf page number to its 0-based PageView index.
+      _currentPageIndex = _indexForPage(pages, restoredPage);
 
       emit(
         QuranLoaded(
@@ -115,13 +112,8 @@ class QuranCubit extends Cubit<QuranState> {
     // Persist last-read page.
     keyValueStorage.setInt(AppConstants.lastReadPagePrefKey, safePage);
 
-    // Find the index in the pages list.
-    final newIndex = loaded.pages.indexWhere((p) => p.pageNumber == safePage);
-    if (newIndex >= 0) {
-      _currentPageIndex = newIndex;
-    } else {
-      _currentPageIndex = safePage - 1;
-    }
+    // Map the page number to its 0-based PageView index.
+    _currentPageIndex = _indexForPage(loaded.pages, safePage);
 
     emit(loaded.copyWithPage(safePage));
   }
@@ -167,6 +159,19 @@ class QuranCubit extends Cubit<QuranState> {
 
   /// Returns the 0-based page index for the PageView controller.
   int get currentPageIndex => _currentPageIndex;
+
+  // ─── Index Helpers ───────────────────────────────────────────────────────────
+
+  /// Maps a Mushaf [pageNumber] to its 0-based PageView index.
+  ///
+  /// The reader's PageView renders each page at `index + 1`, so for the
+  /// full 1–604 Mushaf this is exactly `pageNumber - 1`. When the loaded
+  /// page list is a sparse subset, we fall back to that same page-based
+  /// index so the PageView and the header/footer never desynchronize.
+  int _indexForPage(List<QuranPageEntity> pages, int pageNumber) {
+    final index = pages.indexWhere((p) => p.pageNumber == pageNumber);
+    return index >= 0 ? index : pageNumber - 1;
+  }
 
   // ─── Local Storage Helpers ──────────────────────────────────────────────────
 

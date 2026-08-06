@@ -393,18 +393,23 @@ abstract final class AppTheme {
 
       // ─── Switch ──────────────────────────────────────────────────────────────
       switchTheme: SwitchThemeData(
+        // The thumb must remain a distinct, visible color in BOTH states.
+        // When ON, use white so it contrasts against the colored track.
+        // When OFF, use a light surface color so it contrasts against the
+        // muted track.
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return isDark ? AppColors.emeraldLight : AppColors.emerald;
+            return Colors.white;
           }
-          return textSecondary;
+          return isDark ? AppColors.darkSurfaceVariant : Colors.white;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return primary.withValues(alpha: 0.4);
+            return primary;
           }
           return divider;
         }),
+        trackOutlineColor: WidgetStatePropertyAll(Colors.transparent),
       ),
 
       // ─── Checkbox ────────────────────────────────────────────────────────────

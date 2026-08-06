@@ -127,8 +127,15 @@ Widget _wrap({
   );
 }
 
-/// Opens the drawer via the menu icon.
+/// Taps the screen to reveal the hidden AppBar and metadata bars.
+Future<void> _showControls(WidgetTester tester) async {
+  await tester.tap(find.byType(MushafPageImage).first);
+  await tester.pumpAndSettle();
+}
+
+/// Opens the drawer via the menu icon (requires controls to be visible).
 Future<void> _openDrawer(WidgetTester tester) async {
+  await _showControls(tester);
   await tester.tap(find.byIcon(Icons.menu));
   await tester.pumpAndSettle();
 }
@@ -180,10 +187,13 @@ void main() {
       // Wait for async load to complete.
       await tester.pumpAndSettle();
 
-      // Loaded state shows app bar and page content.
+      // Loaded state shows the image-based Mushaf page.
+      expect(find.byType(MushafPageImage), findsWidgets);
+
+      // Tap to reveal the hidden AppBar and metadata bars.
+      await _showControls(tester);
       expect(find.text('المصحف الشريف'), findsWidgets);
-      expect(find.text('سُورَةُ الفَاتِحَة'), findsWidgets);
-      expect(find.textContaining('نص الآية للصفحة'), findsWidgets);
+      expect(find.textContaining('صفحة'), findsWidgets);
 
       cubit.close();
     });
@@ -229,18 +239,7 @@ void main() {
       expect(find.text('أدوات القراءة'), findsOneWidget);
       expect(find.text('التنقل'), findsOneWidget);
 
-      // Scroll to the bookmark and extra tools sections (drawer stays open).
-      await _scrollDrawerTo(tester, text: 'العلامات المرجعية');
-      expect(find.text('العلامات المرجعية'), findsOneWidget);
-
-      // Reset scroll to top, then scroll to extra tools section.
-      final drawerScrollable = find.descendant(
-        of: find.byType(Drawer),
-        matching: find.byType(Scrollable),
-      ).first;
-      await tester.drag(drawerScrollable, const Offset(0, 500));
-      await tester.pumpAndSettle();
-
+      // Scroll to the extra tools section (drawer stays open).
       await _scrollDrawerTo(tester, text: 'أدوات إضافية');
       expect(find.text('أدوات إضافية'), findsOneWidget);
 
@@ -295,6 +294,59 @@ void main() {
       // Cubit should now be on page 2.
       final loaded = cubit.state as QuranLoaded;
       expect(loaded.currentPageNumber, 2);
+
+      cubit.close();
+    });
+
+    testWidgets('renders the saved last-read page on startup',
+        (tester) async {
+      // Seed storage with page 2 as the previously saved reading position.
+      storage.setInt(AppConstants.lastReadPagePrefKey, 2);
+
+      final pages = [_buildPage(1), _buildPage(2), _buildPage(3)];
+      final cubit = QuranCubit(
+        repository: _FakeQuranRepository(pages: pages, totalPages: 3),
+        keyValueStorage: storage,
+      );
+
+      await tester.pumpWidget(_wrap(cubit: cubit, child: const QuranReaderPage()));
+
+      // Wait for the async load and the PageView to attach.
+      await tester.pumpAndSettle();
+
+      // The cubit restored page 2 → PageView must be on index 1.
+      expect(cubit.currentPageIndex, 1);
+      final loaded = cubit.state as QuranLoaded;
+      expect(loaded.currentPageNumber, 2);
+
+      // Tap to reveal the metadata bars showing "صفحة ٢".
+      await _showControls(tester);
+      expect(find.text('صفحة ٢'), findsWidgets);
+      expect(find.text('صفحة ١'), findsNothing);
+
+      cubit.close();
+    });
+
+    testWidgets('falls back to page 1 when no saved page exists',
+        (tester) async {
+      final pages = [_buildPage(1), _buildPage(2), _buildPage(3)];
+      final cubit = QuranCubit(
+        repository: _FakeQuranRepository(pages: pages, totalPages: 3),
+        keyValueStorage: storage,
+      );
+
+      await tester.pumpWidget(_wrap(cubit: cubit, child: const QuranReaderPage()));
+      await tester.pumpAndSettle();
+
+      // No saved page → reader must start at page 1.
+      final loaded = cubit.state as QuranLoaded;
+      expect(loaded.currentPageNumber, 1);
+      expect(cubit.currentPageIndex, 0);
+
+      // Tap to reveal the metadata bars showing "صفحة ١".
+      await _showControls(tester);
+      expect(find.text('صفحة ١'), findsWidgets);
+      expect(find.text('صفحة ٢'), findsNothing);
 
       cubit.close();
     });

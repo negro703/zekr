@@ -64,9 +64,9 @@ class _AzkarCategoriesPageState extends State<AzkarCategoriesPage> {
               );
 
             default:
-              // Other states (azkar loading/loaded) shouldn't appear here,
-              // but fall back to loading categories if needed.
-              context.read<AzkarCubit>().loadCategories();
+              // Never trigger side effects during build; the cubit was
+              // already kicked off in initState. Show the loading view
+              // until the async load completes.
               return const _CategoriesLoading();
           }
         },
@@ -121,11 +121,16 @@ class _CategoryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         onTap: () {
           // Navigate to the azkar list for this category.
-          // The AzkarCubit provided by HomePage's BlocProvider is
-          // inherited by this new route automatically.
+          // Explicitly re-provide the AzkarCubit via BlocProvider.value so
+          // the new route inherits the same cubit instance and never throws
+          // a ProviderNotFoundException.
+          final cubit = context.read<AzkarCubit>();
           Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => AzkarDetailsPage(category: category),
+              builder: (_) => BlocProvider.value(
+                value: cubit,
+                child: AzkarDetailsPage(category: category),
+              ),
             ),
           );
         },

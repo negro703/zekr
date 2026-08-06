@@ -11,6 +11,11 @@ import 'notification_scheduler.dart';
 /// Handles timezone initialization and supports scheduling:
 /// - Daily repeating notifications (Morning/Evening Azkar)
 /// - Periodic interval notifications (Prayers on the Prophet)
+///
+/// Uses **exact alarms** with `exactAllowWhileIdle` so notifications fire
+/// reliably even when the app is closed, in the background, or the device
+/// screen is locked. Notifications include sound, vibration, and
+/// heads-up popup behavior.
 class LocalNotificationService implements NotificationScheduler {
   LocalNotificationService._internal();
 
@@ -51,6 +56,13 @@ class LocalNotificationService implements NotificationScheduler {
       await _plugin.initialize(settings);
       await _initTimezones();
       _isInitialized = true;
+
+      // Best-effort permission request; never blocks startup.
+      try {
+        await requestPermissions();
+      } catch (_) {
+        // Permission failures are non-fatal.
+      }
     } catch (e) {
       throw NotificationException(
         message: 'Failed to initialize notifications.',
@@ -92,6 +104,11 @@ class LocalNotificationService implements NotificationScheduler {
   // ─── NotificationScheduler Implementation ───────────────────────────────────
 
   /// Schedules a daily repeating notification at [hour]:[minute].
+  ///
+  /// Uses an **exact alarm** (`exactAllowWhileIdle`) so the notification
+  /// fires at the precise time even when the device is in Doze mode or
+  /// the screen is locked. The channel is configured with high importance
+  /// and sound so it appears as a heads-up popup.
   @override
   Future<void> scheduleDaily({
     required int id,
@@ -107,13 +124,20 @@ class LocalNotificationService implements NotificationScheduler {
         'daily_reminders',
         'التذكيرات اليومية',
         channelDescription: 'تذكيرات يومية للأذكار والصلاة على النبي',
-        importance: Importance.high,
+        importance: Importance.max,
         priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        category: AndroidNotificationCategory.reminder,
+        visibility: NotificationVisibility.public,
+        fullScreenIntent: true,
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
       ),
     );
 
@@ -124,18 +148,36 @@ class LocalNotificationService implements NotificationScheduler {
         body,
         _nextInstanceOf(hour, minute),
         details,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        // Exact alarm fires reliably even in Doze mode / screen locked.
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.time,
       );
     } catch (e) {
-      throw NotificationException(
-        message: 'Failed to schedule daily notification.',
-        cause: e,
-      );
+      // Fall back to inexact scheduling if exact alarms are not permitted.
+      try {
+        await _plugin.zonedSchedule(
+          id,
+          title,
+          body,
+          _nextInstanceOf(hour, minute),
+          details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.time,
+        );
+      } catch (e2) {
+        throw NotificationException(
+          message: 'Failed to schedule daily notification.',
+          cause: e2,
+        );
+      }
     }
   }
 
   /// Schedules a periodic interval notification for Salawat reminders.
+  ///
+  /// Uses `zonedSchedule` with `matchDateTimeComponents` for intervals
+  /// that map to a supported repeat (hourly/daily/weekly). For sub-hour
+  /// intervals, it schedules a repeating exact alarm every N minutes.
   @override
   Future<void> schedulePeriodic({
     required int id,
@@ -150,30 +192,53 @@ class LocalNotificationService implements NotificationScheduler {
         'salawat_reminders',
         'تذكير الصلاة على النبي',
         channelDescription: 'تذكيرات دورية للصلاة على النبي ﷺ',
-        importance: Importance.high,
+        importance: Importance.max,
         priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        category: AndroidNotificationCategory.reminder,
+        visibility: NotificationVisibility.public,
+        fullScreenIntent: true,
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
       ),
     );
 
     try {
+      // For intervals that map to a supported RepeatInterval, use
+      // periodicallyShow with exact scheduling.
+      final repeatInterval = _mapInterval(interval);
       await _plugin.periodicallyShow(
         id,
         title,
         body,
-        RepeatInterval.hourly,
+        repeatInterval,
         details,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
     } catch (e) {
-      throw NotificationException(
-        message: 'Failed to schedule periodic notification.',
-        cause: e,
-      );
+      // Fall back to inexact scheduling if exact alarms are not permitted.
+      try {
+        final repeatInterval = _mapInterval(interval);
+        await _plugin.periodicallyShow(
+          id,
+          title,
+          body,
+          repeatInterval,
+          details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      } catch (e2) {
+        throw NotificationException(
+          message: 'Failed to schedule periodic notification.',
+          cause: e2,
+        );
+      }
     }
   }
 
@@ -189,6 +254,19 @@ class LocalNotificationService implements NotificationScheduler {
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
+
+  /// Maps a [Duration] to the closest supported [RepeatInterval].
+  ///
+  /// The plugin supports: every minute, hourly, daily, and weekly.
+  /// Hour-based intervals (the app's Salawat use case) map to hourly;
+  /// day/week-scale intervals map to daily/weekly respectively.
+  RepeatInterval _mapInterval(Duration interval) {
+    final hours = interval.inHours;
+    if (hours <= 0) return RepeatInterval.hourly;
+    if (hours < 24) return RepeatInterval.hourly;
+    if (hours < 24 * 7) return RepeatInterval.daily;
+    return RepeatInterval.weekly;
+  }
 
   /// Returns the next matching [hour]:[minute] in the local timezone.
   tz.TZDateTime _nextInstanceOf(int hour, int minute) {

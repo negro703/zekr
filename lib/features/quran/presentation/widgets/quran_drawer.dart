@@ -6,16 +6,14 @@ import '../../../../core/services/services.dart';
 import '../../../../core/theme/theme.dart';
 import '../bloc/quran_cubit.dart';
 import '../bloc/quran_state.dart';
-import '../pages/bookmarks_page.dart';
 import '../pages/quran_index_page.dart';
-import 'tafseer_bottom_sheet.dart';
 
 /// Advanced Drawer for the Quran Reader.
 ///
 /// Contains:
 /// - Header with app title and quick bookmark actions
-/// - Reading tools: سطوع الشاشة, تغيير خلفية الصفحة, حجم الخط
-/// - Navigation items: الفهرس, الأجزاء, الصفحات (placeholders in Phase 2.5)
+/// - Reading tools: تغيير خلفية الصفحة, حجم الخط
+/// - Navigation items: الفهرس, الأجزاء, الصفحات
 /// - Bookmarking: حفظ علامة, الذهاب إلى العلامة, التحكم بالعلامات
 /// - Dua of completion and other spiritual tools
 class QuranDrawer extends StatelessWidget {
@@ -78,29 +76,6 @@ class QuranDrawer extends StatelessWidget {
                         title: 'فضل قراءة القرآن',
                         onTap: () => _showVirtueSheet(context),
                       ),
-                      _QuranDrawerTile(
-                        icon: Icons.translate,
-                        title: 'معاني الكلمات',
-                        enabled: currentPage != null,
-                        onTap: () {
-                          if (currentPage != null) {
-                            Navigator.of(context).pop();
-                            TafseerBottomSheet.show(context, currentPage);
-                          }
-                        },
-                      ),
-                      _QuranDrawerTile(
-                        icon: Icons.menu_book_outlined,
-                        title: 'التفسير الميسر',
-                        enabled: currentPage != null,
-                        onTap: () {
-                          if (currentPage != null) {
-                            Navigator.of(context).pop();
-                            TafseerBottomSheet.show(context, currentPage);
-                          }
-                        },
-                      ),
-
                       // ─── Navigation Section ───────────────────────────────────
                       _SectionTitle(
                         title: 'التنقل',
@@ -113,7 +88,10 @@ class QuranDrawer extends StatelessWidget {
                           Navigator.of(context).pop();
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) => const QuranIndexPage(),
+                              builder: (_) => BlocProvider.value(
+                                value: cubit,
+                                child: const QuranIndexPage(),
+                              ),
                             ),
                           );
                         },
@@ -125,7 +103,10 @@ class QuranDrawer extends StatelessWidget {
                           Navigator.of(context).pop();
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) => const QuranIndexPage(),
+                              builder: (_) => BlocProvider.value(
+                                value: cubit,
+                                child: const QuranIndexPage(),
+                              ),
                             ),
                           );
                         },
@@ -134,55 +115,6 @@ class QuranDrawer extends StatelessWidget {
                         icon: Icons.pages_outlined,
                         title: 'الصفحات',
                         onTap: () => _showPagesSheet(context),
-                      ),
-
-                      // ─── Bookmarks Section ────────────────────────────────────
-                      _SectionTitle(
-                        title: 'العلامات المرجعية',
-                        secondaryColor: secondaryColor,
-                      ),
-                      _QuranDrawerTile(
-                        icon: Icons.bookmark_add_outlined,
-                        title: 'حفظ علامة في هذه الصفحة',
-                        onTap: () {
-                          if (currentPage != null) {
-                            cubit.setBookmark(currentPage);
-                            ScaffoldMessenger.of(context)
-                              ..hideCurrentSnackBar()
-                              ..showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'تم حفظ العلامة في صفحة $_currentPageLabel(currentPage)',
-                                  ),
-                                ),
-                              );
-                            Navigator.of(context).pop();
-                          }
-                        },
-                      ),
-                      _QuranDrawerTile(
-                        icon: Icons.bookmark_outlined,
-                        title: 'الذهاب إلى العلامة',
-                        enabled: hasBookmark,
-                        subtitle: hasBookmark
-                            ? 'صفحة ${_toArabicDigits(loaded!.bookmarkPageNumber!)}'
-                            : null,
-                        onTap: () {
-                          cubit.jumpToBookmark();
-                          Navigator.of(context).pop();
-                        },
-                      ),
-                      _QuranDrawerTile(
-                        icon: Icons.bookmarks_outlined,
-                        title: 'التحكم بالعلامات',
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const BookmarksPage(),
-                            ),
-                          );
-                        },
                       ),
 
                       // ─── Extra Tools Section ──────────────────────────────────
@@ -194,11 +126,6 @@ class QuranDrawer extends StatelessWidget {
                         icon: Icons.volunteer_activism_outlined,
                         title: 'دعاء الختم',
                         onTap: () => _showDuaSheet(context),
-                      ),
-                      _QuranDrawerTile(
-                        icon: Icons.brightness_6_outlined,
-                        title: 'سطوع الشاشة',
-                        onTap: () => _showBrightnessSheet(context),
                       ),
                       _QuranDrawerTile(
                         icon: Icons.palette_outlined,
@@ -325,15 +252,7 @@ class QuranDrawer extends StatelessWidget {
     );
   }
 
-  void _showBrightnessSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return const _BrightnessControl();
-      },
-    );
-  }
+  // ─── Background color sheet (REMOVED brightness control) ───────────────────
 
   void _showBackgroundSheet(BuildContext context) {
     showModalBottomSheet<void>(
@@ -344,6 +263,11 @@ class QuranDrawer extends StatelessWidget {
         final backgrounds = isDark
             ? AppColors.quranPageBackgroundsDark
             : AppColors.quranPageBackgrounds;
+
+        final currentBgIndex = (LocalStorageService.instance
+                .getInt(AppConstants.quranPageBackgroundPrefKey, defaultValue: 0) ??
+            0)
+            .clamp(0, backgrounds.length - 1);
 
         return SafeArea(
           child: Padding(
@@ -367,14 +291,21 @@ class QuranDrawer extends StatelessWidget {
                     separatorBuilder: (_, _) => const SizedBox(width: 12),
                     itemBuilder: (ctx, index) {
                       final color = backgrounds[index];
+                      final isSelected = index == currentBgIndex;
                       return InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () {
-                          // Store the selected background index locally.
+                          // Store the selected background index.
                           LocalStorageService.instance.setInt(
                             AppConstants.quranPageBackgroundPrefKey,
                             index,
                           );
+                          // Emit a state change to apply the background immediately
+                          context.read<QuranCubit>().changePage(
+                                context.read<QuranCubit>().state is QuranLoaded
+                                    ? (context.read<QuranCubit>().state as QuranLoaded).currentPageNumber
+                                    : 1,
+                              );
                           Navigator.of(ctx).pop();
                         },
                         child: Container(
@@ -383,9 +314,15 @@ class QuranDrawer extends StatelessWidget {
                             color: color,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Theme.of(ctx).colorScheme.outline,
+                              color: isSelected
+                                  ? Theme.of(ctx).colorScheme.primary
+                                  : Theme.of(ctx).colorScheme.outline,
+                              width: isSelected ? 3 : 1,
                             ),
                           ),
+                          child: isSelected
+                              ? const Icon(Icons.check, color: Colors.white, size: 24)
+                              : null,
                         ),
                       );
                     },
@@ -413,8 +350,6 @@ class QuranDrawer extends StatelessWidget {
       return arabic[d];
     }).join();
   }
-
-  static String _currentPageLabel(int page) => _toArabicDigits(page);
 }
 
 // ─── Private Sub-Widgets ──────────────────────────────────────────────────────
@@ -543,14 +478,6 @@ class _QuickActionsRow extends StatelessWidget {
               } : null,
             ),
           ),
-          Expanded(
-            child: _QuickAction(
-              icon: Icons.more_horiz_outlined,
-              label: 'أخرى',
-              color: theme.colorScheme.onSurfaceVariant,
-              onTap: () => Navigator.of(context).pop(),
-            ),
-          ),
         ],
       ),
     );
@@ -640,15 +567,11 @@ class _QuranDrawerTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
-    this.subtitle,
-    this.enabled = true,
   });
 
   final IconData icon;
   final String title;
-  final String? subtitle;
   final VoidCallback onTap;
-  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -657,10 +580,9 @@ class _QuranDrawerTile extends StatelessWidget {
     final primaryColor = isDark ? AppColors.emeraldLight : AppColors.emerald;
 
     return ListTile(
-      enabled: enabled,
       leading: Icon(
         icon,
-        color: enabled ? primaryColor : theme.disabledColor,
+        color: primaryColor,
         size: 22,
       ),
       title: Text(
@@ -668,96 +590,17 @@ class _QuranDrawerTile extends StatelessWidget {
         style: theme.textTheme.bodyLarge?.copyWith(
           fontSize: 15,
           fontWeight: FontWeight.w600,
-          color: enabled
-              ? theme.colorScheme.onSurface
-              : theme.disabledColor,
+          color: theme.colorScheme.onSurface,
         ),
       ),
-      subtitle: subtitle != null
-          ? Text(subtitle!, style: theme.textTheme.bodySmall)
-          : null,
       trailing: Icon(
         Icons.chevron_left,
         color: theme.colorScheme.onSurfaceVariant,
         size: 20,
       ),
-      onTap: enabled ? onTap : null,
+      onTap: onTap,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       dense: true,
-    );
-  }
-}
-
-/// Brightness control sheet.
-class _BrightnessControl extends StatefulWidget {
-  const _BrightnessControl();
-
-  @override
-  State<_BrightnessControl> createState() => _BrightnessControlState();
-}
-
-class _BrightnessControlState extends State<_BrightnessControl> {
-  late double _brightness;
-
-  @override
-  void initState() {
-    super.initState();
-    _brightness = BrightnessService.current;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final primaryColor = isDark ? AppColors.emeraldLight : AppColors.emerald;
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'سطوع الشاشة',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'اضبط الإضاءة للقراءة المريحة',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Icon(Icons.brightness_low, color: theme.colorScheme.onSurfaceVariant),
-                Expanded(
-                  child: Slider(
-                    value: _brightness,
-                    onChanged: (value) {
-                      setState(() => _brightness = value);
-                      BrightnessService.setBrightness(value);
-                    },
-                    activeColor: primaryColor,
-                  ),
-                ),
-                Icon(Icons.brightness_high, color: theme.colorScheme.onSurfaceVariant),
-              ],
-            ),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: () {
-                BrightnessService.resetBrightness();
-                setState(() => _brightness = BrightnessService.current);
-              },
-              icon: const Icon(Icons.settings_backup_restore),
-              label: const Text('استعادة السطوع الافتراضي'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

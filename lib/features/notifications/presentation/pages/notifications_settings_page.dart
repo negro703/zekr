@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/constants/constants.dart';
 import '../../../../core/theme/theme.dart';
 import '../bloc/notifications_cubit.dart';
 import '../bloc/notifications_state.dart';
@@ -10,9 +12,32 @@ import '../bloc/notifications_state.dart';
 /// Allows the user to:
 /// - Toggle Morning Azkar reminder (with time picker)
 /// - Toggle Evening Azkar reminder (with time picker)
-/// - Toggle periodic Salawat reminders (with interval selector)
-class NotificationsSettingsPage extends StatelessWidget {
+/// - Toggle periodic Salawat reminders (with a flexible minutes-based
+///   interval selector)
+///
+/// Preferences are loaded synchronously from local storage on first
+/// mount so the settings UI renders instantly with zero hanging spinners.
+class NotificationsSettingsPage extends StatefulWidget {
   const NotificationsSettingsPage({super.key});
+
+  @override
+  State<NotificationsSettingsPage> createState() =>
+      _NotificationsSettingsPageState();
+}
+
+class _NotificationsSettingsPageState extends State<NotificationsSettingsPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Kick off the synchronous preference load on the first frame so the
+    // cubit transitions out of NotificationsInitial immediately.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cubit = context.read<NotificationsCubit>();
+      if (cubit.state is NotificationsInitial) {
+        cubit.loadPreferences();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -142,9 +167,15 @@ class _SettingsList extends StatelessWidget {
           enabled: preferences.salawatEnabled,
           leading: const Icon(Icons.timer_outlined),
           title: const Text('الفاصل الزمني'),
-          subtitle: Text('كل ${preferences.salawatIntervalHours} ساعة'),
+          subtitle: Text(
+            _formatInterval(preferences.salawatIntervalMinutes),
+          ),
           trailing: const Icon(Icons.chevron_left),
-          onTap: () => _pickInterval(context, cubit, preferences.salawatIntervalHours),
+          onTap: () => _pickInterval(
+            context,
+            cubit,
+            preferences.salawatIntervalMinutes,
+          ),
         ),
       ],
     );
@@ -166,32 +197,23 @@ class _SettingsList extends StatelessWidget {
     }
   }
 
-  /// Shows an interval selector for Salawat reminders.
+  /// Shows a scrollable, flexible interval selector for Salawat reminders.
+  ///
+  /// The sheet is wrapped in a [SingleChildScrollView] inside a
+  /// [SafeArea] so it can never overflow on any screen size. It offers
+  /// both quick presets and a free-form minutes input for an exact
+  /// custom interval.
   Future<void> _pickInterval(
     BuildContext context,
     NotificationsCubit cubit,
-    int current,
+    int currentMinutes,
   ) async {
-    const intervals = [1, 2, 3, 4, 6, 8, 12];
     final selected = await showModalBottomSheet<int>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text('الفاصل الزمني', style: Theme.of(ctx).textTheme.titleLarge),
-            ),
-            ...intervals.map(
-              (hours) => ListTile(
-                title: Text('كل $hours ساعة'),
-                trailing: hours == current ? const Icon(Icons.check) : null,
-                onTap: () => Navigator.of(ctx).pop(hours),
-              ),
-            ),
-          ],
-        ),
+      isScrollControlled: true,
+      builder: (ctx) => _IntervalPickerSheet(
+        currentMinutes: currentMinutes,
+        onSelected: (minutes) => Navigator.of(ctx).pop(minutes),
       ),
     );
     if (selected != null) {
@@ -203,6 +225,192 @@ class _SettingsList extends StatelessWidget {
     final h = hour.toString().padLeft(2, '0');
     final m = minute.toString().padLeft(2, '0');
     return '$h:$m';
+  }
+
+  /// Formats a minutes value as a human-friendly Arabic label.
+  String _formatInterval(int minutes) {
+    if (minutes < 60) {
+      return 'كل ${_toArabicDigits(minutes)} دقيقة';
+    }
+    if (minutes % 60 == 0) {
+      final hours = minutes ~/ 60;
+      return 'كل ${_toArabicDigits(hours)} ساعة';
+    }
+    final hours = minutes ~/ 60;
+    final mins = minutes % 60;
+    return 'كل ${_toArabicDigits(hours)} ساعة و ${_toArabicDigits(mins)} دقيقة';
+  }
+
+  String _toArabicDigits(int value) {
+    const arabic = '٠١٢٣٤٥٦٧٨٩';
+    return value.toString().split('').map((c) {
+      final d = int.parse(c);
+      return arabic[d];
+    }).join();
+  }
+}
+
+/// A scrollable bottom-sheet for choosing the Salawat interval.
+///
+/// Provides quick presets plus a free-form minutes field so the user can
+/// set an exact custom interval (e.g. 15, 30, 45, 90 minutes).
+class _IntervalPickerSheet extends StatefulWidget {
+  const _IntervalPickerSheet({
+    required this.currentMinutes,
+    required this.onSelected,
+  });
+
+  final int currentMinutes;
+  final ValueChanged<int> onSelected;
+
+  @override
+  State<_IntervalPickerSheet> createState() => _IntervalPickerSheetState();
+}
+
+class _IntervalPickerSheetState extends State<_IntervalPickerSheet> {
+  late final TextEditingController _minutesController;
+  String? _errorText;
+
+  /// Quick presets in minutes.
+  static const List<int> _presets = [1, 5, 10, 15, 30, 45, 60, 90, 120, 180, 240];
+
+  @override
+  void initState() {
+    super.initState();
+    _minutesController = TextEditingController(
+      text: widget.currentMinutes.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _minutesController.dispose();
+    super.dispose();
+  }
+
+  void _submitCustom() {
+    final raw = _minutesController.text.trim();
+    final parsed = int.tryParse(raw);
+    if (parsed == null ||
+        parsed < AppConstants.minSalawatIntervalMinutes ||
+        parsed > AppConstants.maxSalawatIntervalMinutes) {
+      setState(() {
+        _errorText =
+            'أدخل قيمة بين ${AppConstants.minSalawatIntervalMinutes} و ${AppConstants.maxSalawatIntervalMinutes} دقيقة';
+      });
+      return;
+    }
+    widget.onSelected(parsed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final primaryColor = isDark ? AppColors.emeraldLight : AppColors.emerald;
+
+    return Padding(
+      // Add bottom padding equal to the keyboard inset so the input field
+      // shifts up and remains fully visible above the keyboard.
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'الفاصل الزمني',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'اختر فاصل زمني للصلاة على النبي ﷺ',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // ─── Quick Presets ─────────────────────────────────────────────
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: _presets.map((minutes) {
+                  final isSelected = minutes == widget.currentMinutes;
+                  return ChoiceChip(
+                    label: Text(_presetLabel(minutes)),
+                    selected: isSelected,
+                    selectedColor: primaryColor.withValues(alpha: 0.15),
+                    labelStyle: TextStyle(
+                      color: isSelected ? primaryColor : null,
+                      fontWeight: isSelected ? FontWeight.w700 : null,
+                    ),
+                    onSelected: (_) => widget.onSelected(minutes),
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 20),
+
+              // ─── Custom Minutes Input ──────────────────────────────────────
+              Text(
+                'فاصل مخصص بالدقائق',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _minutesController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  hintText: 'مثال: 25',
+                  suffixText: 'دقيقة',
+                  errorText: _errorText,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onSubmitted: (_) => _submitCustom(),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _submitCustom,
+                icon: const Icon(Icons.check),
+                label: const Text('تطبيق الفاصل المخصص'),
+                style: FilledButton.styleFrom(backgroundColor: primaryColor),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _presetLabel(int minutes) {
+    if (minutes < 60) return '${_toArabicDigits(minutes)} د';
+    if (minutes % 60 == 0) {
+      return '${_toArabicDigits(minutes ~/ 60)} س';
+    }
+    return '${_toArabicDigits(minutes ~/ 60)}س ${_toArabicDigits(minutes % 60)}د';
+  }
+
+  String _toArabicDigits(int value) {
+    const arabic = '٠١٢٣٤٥٦٧٨٩';
+    return value.toString().split('').map((c) {
+      final d = int.parse(c);
+      return arabic[d];
+    }).join();
   }
 }
 

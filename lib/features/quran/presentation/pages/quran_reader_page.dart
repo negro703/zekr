@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -5,10 +7,10 @@ import '../../../../core/constants/constants.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/theme/theme.dart';
 import '../../../../core/utils/quran_page_metadata.dart';
-import '../../domain/entities/entities.dart';
+import '../../../../core/utils/quran_surahs_metadata.dart';
 import '../bloc/quran_cubit.dart';
 import '../bloc/quran_state.dart';
-import '../widgets/page_content_widget.dart';
+import '../widgets/mushaf_page_image.dart';
 import '../widgets/quran_drawer.dart';
 
 /// The main Quran Reader page.
@@ -16,6 +18,11 @@ import '../widgets/quran_drawer.dart';
 /// Displays the Quran as a horizontally scrollable [PageView] of
 /// Uthmani-script pages, with an advanced drawer for navigation,
 /// bookmarks, and reading tools.
+///
+/// The reader is **immersive by default**: the AppBar and metadata bars
+/// are hidden so the Mushaf page fills 100% of the screen. Tapping the
+/// screen toggles the bars on/off. A smooth page-turn animation mimics
+/// flipping physical pages of the Mushaf.
 class QuranReaderPage extends StatefulWidget {
   const QuranReaderPage({super.key});
 
@@ -25,8 +32,14 @@ class QuranReaderPage extends StatefulWidget {
 
 class _QuranReaderPageState extends State<QuranReaderPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final PageController _pageController = PageController();
+  PageController? _pageController;
   late final QuranCubit _cubit;
+
+  /// Whether the AppBar and metadata bars are visible.
+  bool _controlsVisible = false;
+
+  /// Timer to auto-hide the controls after a short delay.
+  Timer? _hideTimer;
 
   @override
   void initState() {
@@ -38,19 +51,54 @@ class _QuranReaderPageState extends State<QuranReaderPage> {
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _hideTimer?.cancel();
+    _pageController?.dispose();
     super.dispose();
+  }
+
+  /// Toggles the visibility of the AppBar and metadata bars.
+  void _toggleControls() {
+    setState(() => _controlsVisible = !_controlsVisible);
+    _scheduleAutoHide();
+  }
+
+  /// Schedules auto-hiding of the controls after a short delay.
+  void _scheduleAutoHide() {
+    _hideTimer?.cancel();
+    if (!_controlsVisible) return;
+    _hideTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _controlsVisible = false);
+      }
+    });
+  }
+
+  /// Lazily creates the [PageController] pinned to the cubit's restored
+  /// page index.
+  ///
+  /// Initializing the controller with the exact saved index (rather than
+  /// defaulting to page 0) guarantees the [PageView] renders the user's
+  /// last-read page on the very first frame — keeping the AppBar, the
+  /// Mushaf metadata bars, and the page content 100% in sync.
+  PageController _ensurePageController() {
+    final existing = _pageController;
+    if (existing != null) return existing;
+
+    final controller = PageController(initialPage: _cubit.currentPageIndex);
+    _pageController = controller;
+    return controller;
   }
 
   /// Syncs the PageView with the cubit when the current page changes
   /// (e.g., via drawer navigation or bookmark jump).
   void _syncPageView(QuranLoaded loaded) {
-    final desiredIndex = _currentIndexFor(loaded);
-    if (!_pageController.hasClients) return;
+    final pageController = _pageController;
+    if (pageController == null || !pageController.hasClients) return;
 
-    final currentIndex = _pageController.page?.round() ?? 0;
+    final desiredIndex = _currentIndexFor(loaded);
+    final currentIndex = pageController.page?.round() ?? 0;
     if (currentIndex != desiredIndex) {
-      _pageController.jumpToPage(desiredIndex);
+      pageController.jumpToPage(desiredIndex);
     }
   }
 
@@ -75,61 +123,63 @@ class _QuranReaderPageState extends State<QuranReaderPage> {
       key: _scaffoldKey,
       backgroundColor: theme.scaffoldBackgroundColor,
       drawer: const QuranDrawer(),
-      // ─── App Bar (Drawer Trigger) ───────────────────────────────────────────
-      appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          tooltip: 'القائمة',
-          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-        ),
-        title: BlocBuilder<QuranCubit, QuranState>(
-          buildWhen: (previous, current) =>
-              current is QuranLoaded &&
-              (previous is! QuranLoaded ||
-                  previous.currentPageNumber != current.currentPageNumber),
-          builder: (context, state) {
-            final isDark = theme.brightness == Brightness.dark;
-            final pageNumber = state is QuranLoaded
-                ? state.currentPageNumber
-                : 1;
+      // ─── App Bar (Drawer Trigger) — hidden by default ───────────────────────
+      appBar: _controlsVisible
+          ? AppBar(
+              backgroundColor: theme.scaffoldBackgroundColor,
+              leading: IconButton(
+                icon: const Icon(Icons.menu),
+                tooltip: 'القائمة',
+                onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+              ),
+              title: BlocBuilder<QuranCubit, QuranState>(
+                buildWhen: (previous, current) =>
+                    current is QuranLoaded &&
+                    (previous is! QuranLoaded ||
+                        previous.currentPageNumber != current.currentPageNumber),
+                builder: (context, state) {
+                  final isDark = theme.brightness == Brightness.dark;
+                  final pageNumber = state is QuranLoaded
+                      ? state.currentPageNumber
+                      : 1;
 
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'المصحف الشريف',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: isDark ? AppColors.goldLight : AppColors.emerald,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: (isDark ? AppColors.goldLight : AppColors.gold)
-                        .withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'صفحة ${_toArabicDigits(pageNumber)}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: isDark ? AppColors.goldLight : AppColors.goldDark,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'المصحف الشريف',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: isDark ? AppColors.goldLight : AppColors.emerald,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: (isDark ? AppColors.goldLight : AppColors.gold)
+                              .withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'صفحة ${_toArabicDigits(pageNumber)}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: isDark ? AppColors.goldLight : AppColors.goldDark,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            )
+          : null,
 
-      // ─── Body: State-driven PageView ────────────────────────────────────────
+      // ─── Body: State-driven PageView with Mushaf metadata overlay ───────────
       body: BlocBuilder<QuranCubit, QuranState>(
         buildWhen: (previous, current) =>
             current is QuranLoading ||
@@ -151,19 +201,64 @@ class _QuranReaderPageState extends State<QuranReaderPage> {
               );
 
             case QuranLoaded():
-              // Sync PageView when page changes (e.g., from drawer).
+              // Create the controller pinned to the restored page index so
+              // the PageView renders the saved page from the first frame.
+              final pageController = _ensurePageController();
+
+              // Sync remaining PageView moves (e.g., drawer/bookmark jumps).
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 _syncPageView(state);
               });
 
-              return _QuranPageView(
-                pageController: _pageController,
-                loaded: state,
-                onPageChanged: (index) {
-                  // Convert PageView index → Mushaf page number.
-                  final pageNumber = index + 1;
-                  _cubit.changePage(pageNumber);
-                },
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleControls,
+                child: Stack(
+                  children: [
+                    // ─── PageView (fills 100% of the screen) ─────────────────
+                    Positioned.fill(
+                      child: _QuranPageView(
+                        pageController: pageController,
+                        loaded: state,
+                        onPageChanged: (index) {
+                          // Convert PageView index → Mushaf page number.
+                          final pageNumber = index + 1;
+                          _cubit.changePage(pageNumber);
+                        },
+                      ),
+                    ),
+
+                    // ─── Top Mushaf Metadata Bar (animated) ──────────────────
+                    if (_controlsVisible)
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        child: _AnimatedMushafBar(
+                          visible: _controlsVisible,
+                          child: _MushafMetadataBar(
+                            pageNumber: state.currentPageNumber,
+                            alignment: _MushafBarAlignment.top,
+                          ),
+                        ),
+                      ),
+
+                    // ─── Bottom Mushaf Metadata Bar (animated) ───────────────
+                    if (_controlsVisible)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: _AnimatedMushafBar(
+                          visible: _controlsVisible,
+                          child: _MushafMetadataBar(
+                            pageNumber: state.currentPageNumber,
+                            alignment: _MushafBarAlignment.bottom,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               );
           }
         },
@@ -181,7 +276,178 @@ class _QuranReaderPageState extends State<QuranReaderPage> {
   }
 }
 
-/// The horizontal PageView of Quran pages.
+/// Animated wrapper for the Mushaf metadata bars.
+class _AnimatedMushafBar extends StatelessWidget {
+  const _AnimatedMushafBar({
+    required this.visible,
+    required this.child,
+  });
+
+  final bool visible;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSlide(
+      offset: visible ? Offset.zero : const Offset(0, -1),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      child: AnimatedOpacity(
+        opacity: visible ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Alignment of the Mushaf metadata bar.
+enum _MushafBarAlignment { top, bottom }
+
+/// A clean, elegant bar displaying authentic Mushaf metadata for the
+/// current page: Surah name, Juz number, and Hizb/Quarter info.
+class _MushafMetadataBar extends StatelessWidget {
+  const _MushafMetadataBar({
+    required this.pageNumber,
+    required this.alignment,
+  });
+
+  final int pageNumber;
+  final _MushafBarAlignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final primaryColor = isDark ? AppColors.emeraldLight : AppColors.emerald;
+    final goldColor = isDark ? AppColors.goldLight : AppColors.gold;
+
+    // Resolve authentic metadata for the current page.
+    // Only Juz and Hizb are shown — the quarter overlay was removed
+    // because it divided the Hizb span into equal parts, which does NOT
+    // match the authentic Medina Mushaf quarter markers.
+    final surah = surahForMushafPage(pageNumber);
+    final juz = juzForPage(pageNumber);
+    final hizb = hizbForPage(pageNumber);
+
+    final isTop = alignment == _MushafBarAlignment.top;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.92),
+        border: Border(
+          bottom: isTop
+              ? BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5)
+              : BorderSide.none,
+          top: isTop
+              ? BorderSide.none
+              : BorderSide(color: theme.colorScheme.outlineVariant, width: 0.5),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // ─── Surah Name ───────────────────────────────────────────────────
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'سورة ${surah.name}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: primaryColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'صفحة ${_toArabicDigits(pageNumber)}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ─── Juz ──────────────────────────────────────────────────────────
+            _MetadataChip(
+              icon: Icons.auto_stories_outlined,
+              label: 'الجزء ${_toArabicDigits(juz)}',
+              color: goldColor,
+            ),
+
+            const SizedBox(width: 8),
+
+            // ─── Hizb ─────────────────────────────────────────────────────────
+            _MetadataChip(
+              icon: Icons.bookmark_border,
+              label: 'حزب ${_toArabicDigits(hizb)}',
+              color: primaryColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Converts Western digits to Arabic-Indic digits for display.
+  static String _toArabicDigits(int value) {
+    const arabic = '٠١٢٣٤٥٦٧٨٩';
+    return value.toString().split('').map((c) {
+      final d = int.parse(c);
+      return arabic[d];
+    }).join();
+  }
+}
+
+/// A compact metadata chip used in the Mushaf bar.
+class _MetadataChip extends StatelessWidget {
+  const _MetadataChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The horizontal PageView of Quran pages with a smooth page-turn effect.
 class _QuranPageView extends StatelessWidget {
   const _QuranPageView({
     required this.pageController,
@@ -195,10 +461,9 @@ class _QuranPageView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgrounds = isDark
-        ? AppColors.quranPageBackgroundsDark
-        : AppColors.quranPageBackgrounds;
+    // Always use the light parchment backgrounds for the Mushaf pages.
+    // Dark backgrounds would make the transparent black text invisible.
+    final backgrounds = AppColors.quranPageBackgrounds;
 
     // Use the saved page background preference (fall back to index 0).
     final bgIndex = (LocalStorageService.instance
@@ -212,34 +477,25 @@ class _QuranPageView extends StatelessWidget {
     return PageView.builder(
       controller: pageController,
       scrollDirection: Axis.horizontal,
-      physics: const BouncingScrollPhysics(),
+      // Smooth page-turn physics with a natural flip feel.
+      physics: const PageScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
       onPageChanged: onPageChanged,
       itemCount: loaded.totalPages,
       // Optimize with a viewport pre-cache for smooth swiping.
       allowImplicitScrolling: true,
       itemBuilder: (context, index) {
-        // Mushaf page number = index + 1.
+        // Mushaf page number = index + 1 (1–604).
         final pageNumber = index + 1;
-        // Prefer the loaded page; fall back to a placeholder.
-        final page = loaded.pageByNumber(pageNumber);
 
-        return PageContentWidget(
-          page: page ?? _placeholderPage(pageNumber, loaded),
+        // Render the official Medina Mushaf page image with a fixed
+        // light background (no zoom/pan — locked to full-screen).
+        return MushafPageImage(
+          pageNumber: pageNumber,
           backgroundColor: backgroundColor,
         );
       },
-    );
-  }
-
-  /// Creates a placeholder page for any Mushaf page (1–604) that isn't
-  /// present in the loaded JSON dataset. Uses the canonical Juz mapping
-  /// so the footer always shows the correct Juz number.
-  QuranPageEntity _placeholderPage(int pageNumber, QuranLoaded loaded) {
-    return QuranPageEntity(
-      pageNumber: pageNumber,
-      juzNumber: juzForPage(pageNumber),
-      surahName: null,
-      ayahs: const [],
     );
   }
 }

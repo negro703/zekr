@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/constants.dart';
@@ -7,9 +9,13 @@ import 'notifications_state.dart';
 /// Cubit managing notification preferences and scheduling.
 ///
 /// Responsibilities:
-/// - Load/save user preferences via [KeyValueStorage]
+/// - Load/save user preferences synchronously via [KeyValueStorage]
 /// - Schedule/cancel Morning & Evening Azkar daily reminders
 /// - Schedule/cancel periodic Salawat (Prayers on the Prophet) reminders
+///
+/// Preferences are read synchronously from the key-value store so the
+/// settings UI renders instantly with zero flicker or hanging spinners.
+/// Scheduling happens in the background and can never block loading.
 class NotificationsCubit extends Cubit<NotificationsState> {
   NotificationsCubit({
     KeyValueStorage? keyValueStorage,
@@ -20,10 +26,38 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
   final KeyValueStorage _storage;
   final NotificationScheduler _scheduler;
+  bool _preferencesLoaded = false;
 
-  /// Loads preferences from storage and applies scheduled notifications.
+  /// Whether preferences have been loaded at least once.
+  bool get preferencesLoaded => _preferencesLoaded;
+
+  /// Loads preferences synchronously from storage and applies schedules.
+  ///
+  /// Reading from [KeyValueStorage] is a synchronous, non-hanging
+  /// operation. Scheduling is fire-and-forget with errors swallowed so a
+  /// platform-level failure can never leave the UI stuck on a spinner.
+  ///
+  /// Backwards-compatible: if an old `salawat_interval_hours` value is
+  /// found, it is migrated to minutes (×60) so existing users keep their
+  /// chosen interval.
   Future<void> loadPreferences() async {
+    // Already loaded — re-emit cached state without a loading flash.
+    if (_preferencesLoaded && state is NotificationsLoaded) {
+      await _applySchedulesSafe((state as NotificationsLoaded).preferences);
+      return;
+    }
+
     emit(const NotificationsLoading());
+
+    // Synchronous local read — instant, no async gap.
+    final savedMinutes =
+        _storage.getInt(AppConstants.salawatIntervalMinutesPrefKey);
+    final savedHours =
+        _storage.getInt(AppConstants.salawatIntervalHoursPrefKey);
+
+    // Prefer minutes; fall back to legacy hours (migrated ×60).
+    final salawatMinutes = savedMinutes ??
+        ((savedHours ?? 1) * 60).clamp(1, 24 * 60).toInt();
 
     final prefs = NotificationPreferences(
       morningEnabled:
@@ -40,12 +74,14 @@ class NotificationsCubit extends Cubit<NotificationsState> {
           _storage.getInt(AppConstants.eveningAzkarMinutePrefKey) ?? 0,
       salawatEnabled:
           _storage.getBool(AppConstants.salawatEnabledPrefKey) ?? false,
-      salawatIntervalHours:
-          _storage.getInt(AppConstants.salawatIntervalHoursPrefKey) ?? 1,
+      salawatIntervalMinutes: salawatMinutes,
     );
 
+    _preferencesLoaded = true;
     emit(NotificationsLoaded(preferences: prefs));
-    await _applySchedules(prefs);
+
+    // Best-effort scheduling; never blocks the loaded state.
+    await _applySchedulesSafe(prefs);
   }
 
   /// Toggles the Morning Azkar reminder.
@@ -55,7 +91,9 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
   /// Sets the Morning Azkar reminder time.
   Future<void> setMorningTime(int hour, int minute) async {
-    await _updatePrefs((p) => p.copyWith(morningHour: hour, morningMinute: minute));
+    await _updatePrefs(
+      (p) => p.copyWith(morningHour: hour, morningMinute: minute),
+    );
   }
 
   /// Toggles the Evening Azkar reminder.
@@ -65,7 +103,9 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
   /// Sets the Evening Azkar reminder time.
   Future<void> setEveningTime(int hour, int minute) async {
-    await _updatePrefs((p) => p.copyWith(eveningHour: hour, eveningMinute: minute));
+    await _updatePrefs(
+      (p) => p.copyWith(eveningHour: hour, eveningMinute: minute),
+    );
   }
 
   /// Toggles periodic Salawat reminders.
@@ -73,9 +113,10 @@ class NotificationsCubit extends Cubit<NotificationsState> {
     await _updatePrefs((p) => p.copyWith(salawatEnabled: enabled));
   }
 
-  /// Sets the Salawat reminder interval (in hours).
-  Future<void> setSalawatInterval(int hours) async {
-    await _updatePrefs((p) => p.copyWith(salawatIntervalHours: hours));
+  /// Sets the Salawat reminder interval (in minutes).
+  Future<void> setSalawatInterval(int minutes) async {
+    final safe = minutes.clamp(1, 24 * 60).toInt();
+    await _updatePrefs((p) => p.copyWith(salawatIntervalMinutes: safe));
   }
 
   /// Persists updated preferences and re-applies all schedules.
@@ -87,55 +128,124 @@ class NotificationsCubit extends Cubit<NotificationsState> {
     final current = (state as NotificationsLoaded).preferences;
     final updated = update(current);
 
+    // Emit immediately for instant UI feedback.
     emit((state as NotificationsLoaded).copyWith(preferences: updated));
 
-    await _storage.setBool(AppConstants.morningAzkarEnabledPrefKey, updated.morningEnabled);
-    await _storage.setInt(AppConstants.morningAzkarHourPrefKey, updated.morningHour);
-    await _storage.setInt(AppConstants.morningAzkarMinutePrefKey, updated.morningMinute);
-    await _storage.setBool(AppConstants.eveningAzkarEnabledPrefKey, updated.eveningEnabled);
-    await _storage.setInt(AppConstants.eveningAzkarHourPrefKey, updated.eveningHour);
-    await _storage.setInt(AppConstants.eveningAzkarMinutePrefKey, updated.eveningMinute);
-    await _storage.setBool(AppConstants.salawatEnabledPrefKey, updated.salawatEnabled);
-    await _storage.setInt(AppConstants.salawatIntervalHoursPrefKey, updated.salawatIntervalHours);
+    // Persist synchronously (fire-and-forget for platform writes).
+    unawaited(
+      _storage
+          .setBool(
+            AppConstants.morningAzkarEnabledPrefKey,
+            updated.morningEnabled,
+          )
+          .catchError((_) {}),
+    );
+    unawaited(
+      _storage
+          .setInt(
+            AppConstants.morningAzkarHourPrefKey,
+            updated.morningHour,
+          )
+          .catchError((_) {}),
+    );
+    unawaited(
+      _storage
+          .setInt(
+            AppConstants.morningAzkarMinutePrefKey,
+            updated.morningMinute,
+          )
+          .catchError((_) {}),
+    );
+    unawaited(
+      _storage
+          .setBool(
+            AppConstants.eveningAzkarEnabledPrefKey,
+            updated.eveningEnabled,
+          )
+          .catchError((_) {}),
+    );
+    unawaited(
+      _storage
+          .setInt(AppConstants.eveningAzkarHourPrefKey, updated.eveningHour)
+          .catchError((_) {}),
+    );
+    unawaited(
+      _storage
+          .setInt(
+            AppConstants.eveningAzkarMinutePrefKey,
+            updated.eveningMinute,
+          )
+          .catchError((_) {}),
+    );
+    unawaited(
+      _storage
+          .setBool(AppConstants.salawatEnabledPrefKey, updated.salawatEnabled)
+          .catchError((_) {}),
+    );
+    unawaited(
+      _storage
+          .setInt(
+            AppConstants.salawatIntervalMinutesPrefKey,
+            updated.salawatIntervalMinutes,
+          )
+          .catchError((_) {}),
+    );
+    // Clear the legacy hours key once we're on the minutes scheme.
+    unawaited(
+      _storage.remove(AppConstants.salawatIntervalHoursPrefKey).catchError(
+            (_) {},
+          ),
+    );
 
-    await _applySchedules(updated);
+    await _applySchedulesSafe(updated);
   }
 
-  /// Applies all notification schedules based on the given [prefs].
-  Future<void> _applySchedules(NotificationPreferences prefs) async {
-    if (prefs.morningEnabled) {
-      await _scheduler.scheduleDaily(
-        id: AppConstants.morningAzkarNotificationId,
-        title: NotificationPayloads.morningTitle,
-        body: NotificationPayloads.morningBody,
-        hour: prefs.morningHour,
-        minute: prefs.morningMinute,
-      );
-    } else {
-      await _scheduler.cancelNotification(AppConstants.morningAzkarNotificationId);
-    }
+  /// Applies all notification schedules based on the given [prefs],
+  /// swallowing any platform-level errors so the UI never hangs.
+  Future<void> _applySchedulesSafe(NotificationPreferences prefs) async {
+    try {
+      if (prefs.morningEnabled) {
+        await _scheduler.scheduleDaily(
+          id: AppConstants.morningAzkarNotificationId,
+          title: NotificationPayloads.morningTitle,
+          body: NotificationPayloads.morningBody,
+          hour: prefs.morningHour,
+          minute: prefs.morningMinute,
+        );
+      } else {
+        await _scheduler.cancelNotification(
+          AppConstants.morningAzkarNotificationId,
+        );
+      }
 
-    if (prefs.eveningEnabled) {
-      await _scheduler.scheduleDaily(
-        id: AppConstants.eveningAzkarNotificationId,
-        title: NotificationPayloads.eveningTitle,
-        body: NotificationPayloads.eveningBody,
-        hour: prefs.eveningHour,
-        minute: prefs.eveningMinute,
-      );
-    } else {
-      await _scheduler.cancelNotification(AppConstants.eveningAzkarNotificationId);
-    }
+      if (prefs.eveningEnabled) {
+        await _scheduler.scheduleDaily(
+          id: AppConstants.eveningAzkarNotificationId,
+          title: NotificationPayloads.eveningTitle,
+          body: NotificationPayloads.eveningBody,
+          hour: prefs.eveningHour,
+          minute: prefs.eveningMinute,
+        );
+      } else {
+        await _scheduler.cancelNotification(
+          AppConstants.eveningAzkarNotificationId,
+        );
+      }
 
-    if (prefs.salawatEnabled) {
-      await _scheduler.schedulePeriodic(
-        id: AppConstants.prayersOnProphetNotificationId,
-        title: NotificationPayloads.salawatTitle,
-        body: NotificationPayloads.salawatBody,
-        interval: Duration(hours: prefs.salawatIntervalHours),
-      );
-    } else {
-      await _scheduler.cancelNotification(AppConstants.prayersOnProphetNotificationId);
+      if (prefs.salawatEnabled) {
+        await _scheduler.schedulePeriodic(
+          id: AppConstants.prayersOnProphetNotificationId,
+          title: NotificationPayloads.salawatTitle,
+          body: NotificationPayloads.salawatBody,
+          interval: Duration(minutes: prefs.salawatIntervalMinutes),
+        );
+      } else {
+        await _scheduler.cancelNotification(
+          AppConstants.prayersOnProphetNotificationId,
+        );
+      }
+    } catch (_) {
+      // Scheduling failures must never block settings or crash the app.
     }
   }
 }

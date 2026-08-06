@@ -2,18 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/theme/theme.dart';
+import '../../../../core/utils/quran_juz_metadata.dart';
+import '../../../../core/utils/quran_page_metadata.dart';
 import '../../../../core/utils/quran_surahs_metadata.dart';
 import '../bloc/quran_cubit.dart';
 import '../bloc/quran_state.dart';
 
-/// Full-screen Quran Index with two tabs:
+/// Full-screen Quran Index matching the physical Mushaf structure.
 ///
-/// - **السور**: all 114 Surahs with Makki/Madani badges, Ayah counts,
-///   and starting Mushaf page numbers.
-/// - **الأجزاء**: the 30 Juz with their starting pages.
+/// Two tabs:
+/// - **السور**: all 114 Surahs with Makki/Madani indicator icons
+///   (Kaaba for Makki, Green Dome for Madani), Ayah counts, and exact
+///   starting Mushaf pages (1–604).
+/// - **الأجزاء**: the 30 Juz with their exact starting pages.
 ///
-/// Tapping any item closes the index (via [Navigator.pop]) and jumps the
-/// [QuranCubit] (and thus the reader's PageView) to the matching page.
+/// Tapping any item instantly calls [QuranCubit.changePage] to jump the
+/// reader's [PageController] to the exact target page with zero lag, then
+/// closes the index (via [Navigator.pop]).
 class QuranIndexPage extends StatefulWidget {
   const QuranIndexPage({super.key});
 
@@ -40,7 +45,9 @@ class _QuranIndexPageState extends State<QuranIndexPage>
   /// Jumps the reader to [pageNumber] and closes this page.
   void _jumpToPage(BuildContext context, int pageNumber) {
     final cubit = context.read<QuranCubit>();
-    cubit.changePage(pageNumber);
+    // Clamp to the valid Mushaf range (1–604).
+    final safePage = pageNumber.clamp(1, kTotalMushafPages).toInt();
+    cubit.changePage(safePage);
     Navigator.of(context).pop();
   }
 
@@ -167,22 +174,46 @@ class _SurahTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: surah.isMakki
-                  ? AppColors.emerald.withValues(alpha: 0.12)
-                  : AppColors.gold.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              surah.isMakki ? 'مكية' : 'مدنية',
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontSize: 10,
+          // ─── Makki/Madani Indicator Icon ────────────────────────────────────
+          // Kaaba icon for Makki surahs, Green Dome icon for Madani surahs.
+          Tooltip(
+            message: surah.isMakki ? 'مكية' : 'مدنية',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
                 color: surah.isMakki
-                    ? (isDark ? AppColors.emeraldLight : AppColors.emerald)
-                    : (isDark ? AppColors.goldLight : AppColors.goldDark),
-                fontWeight: FontWeight.w700,
+                    ? AppColors.emerald.withValues(alpha: 0.12)
+                    : AppColors.gold.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    surah.isMakki
+                        ? Icons.place_outlined // Kaaba
+                        : Icons.account_balance_outlined, // Green Dome
+                    size: 14,
+                    color: surah.isMakki
+                        ? (isDark ? AppColors.emeraldLight : AppColors.emerald)
+                        : (isDark ? AppColors.goldLight : AppColors.goldDark),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    surah.isMakki ? 'مكية' : 'مدنية',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      fontSize: 10,
+                      color: surah.isMakki
+                          ? (isDark
+                              ? AppColors.emeraldLight
+                              : AppColors.emerald)
+                          : (isDark
+                              ? AppColors.goldLight
+                              : AppColors.goldDark),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -216,22 +247,19 @@ class _JuzTab extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final primaryColor = isDark ? AppColors.emeraldLight : AppColors.emerald;
-
-    // Juz start pages (and the final page of the Mushaf).
-    final List<int> startPages = List<int>.from(quranJuzStartPages);
+    final goldColor = isDark ? AppColors.goldLight : AppColors.gold;
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: startPages.length,
+      itemCount: kQuranJuzMetadata.length,
       itemBuilder: (context, index) {
-        final juzNumber = index + 1;
-        final startPage = startPages[index];
-        final isCurrent = currentPage >= startPage &&
-            (index == startPages.length - 1 ||
-                currentPage < startPages[index + 1]);
+        final juz = kQuranJuzMetadata[index];
+        final isCurrent = currentPage >= juz.startPage &&
+            (index == kQuranJuzMetadata.length - 1 ||
+                currentPage < kQuranJuzMetadata[index + 1].startPage);
 
         return ListTile(
-          onTap: () => onSelected(startPage),
+          onTap: () => onSelected(juz.startPage),
           leading: Container(
             width: 40,
             height: 40,
@@ -239,9 +267,14 @@ class _JuzTab extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: primaryColor.withValues(alpha: 0.12),
+              border: Border.all(
+                color: isCurrent
+                    ? goldColor
+                    : primaryColor.withValues(alpha: 0.3),
+              ),
             ),
             child: Text(
-              _toArabicDigits(juzNumber),
+              _toArabicDigits(juz.number),
               style: theme.textTheme.titleSmall?.copyWith(
                 color: primaryColor,
                 fontWeight: FontWeight.w800,
@@ -249,15 +282,16 @@ class _JuzTab extends StatelessWidget {
             ),
           ),
           title: Text(
-            'الجزء ${_toArabicDigitsText(juzNumber)}',
+            'الجزء ${_toArabicDigitsText(juz.number)}',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),
           ),
           subtitle: Text(
-            'يبدأ من صفحة ${_toArabicDigits(startPage)}',
+            'يبدأ من صفحة ${_toArabicDigits(juz.startPage)} • سورة ${juz.surahName} • آية ${_toArabicDigits(juz.ayahNumber)}',
             style: theme.textTheme.bodySmall,
           ),
+          isThreeLine: true,
           trailing: isCurrent
               ? Icon(Icons.radio_button_checked,
                   color: primaryColor, size: 18)

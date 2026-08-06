@@ -52,7 +52,9 @@ class _AzkarDetailsPageState extends State<AzkarDetailsPage> {
               }
               return _AzkarList(azkar: azkar, progress: progress);
             default:
-              context.read<AzkarCubit>().loadAzkar(widget.category.id);
+              // Never trigger side effects during build; just render the
+              // loading placeholder — the cubit was already kicked off in
+              // initState and will emit a new state asynchronously.
               return const _AzkarListLoading();
           }
         },

@@ -28,7 +28,7 @@ class NotificationPreferences extends Equatable {
     this.eveningHour = 17,
     this.eveningMinute = 0,
     this.salawatEnabled = false,
-    this.salawatIntervalHours = 1,
+    this.salawatIntervalMinutes = 60,
   });
 
   final bool morningEnabled;
@@ -38,7 +38,12 @@ class NotificationPreferences extends Equatable {
   final int eveningHour;
   final int eveningMinute;
   final bool salawatEnabled;
-  final int salawatIntervalHours;
+
+  /// The periodic Salawat reminder interval in **minutes**.
+  ///
+  /// Allows the user to set an exact custom interval (e.g. 15, 30, 45,
+  /// 90 minutes) rather than being limited to whole hours.
+  final int salawatIntervalMinutes;
 
   NotificationPreferences copyWith({
     bool? morningEnabled,
@@ -48,7 +53,7 @@ class NotificationPreferences extends Equatable {
     int? eveningHour,
     int? eveningMinute,
     bool? salawatEnabled,
-    int? salawatIntervalHours,
+    int? salawatIntervalMinutes,
   }) {
     return NotificationPreferences(
       morningEnabled: morningEnabled ?? this.morningEnabled,
@@ -58,7 +63,8 @@ class NotificationPreferences extends Equatable {
       eveningHour: eveningHour ?? this.eveningHour,
       eveningMinute: eveningMinute ?? this.eveningMinute,
       salawatEnabled: salawatEnabled ?? this.salawatEnabled,
-      salawatIntervalHours: salawatIntervalHours ?? this.salawatIntervalHours,
+      salawatIntervalMinutes:
+          salawatIntervalMinutes ?? this.salawatIntervalMinutes,
     );
   }
 
@@ -71,7 +77,7 @@ class NotificationPreferences extends Equatable {
         eveningHour,
         eveningMinute,
         salawatEnabled,
-        salawatIntervalHours,
+        salawatIntervalMinutes,
       ];
 }
 
