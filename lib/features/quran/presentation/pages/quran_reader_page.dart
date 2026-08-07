@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/constants.dart';
+import '../../../../core/localization/localization.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/theme/theme.dart';
 import '../../../../core/utils/quran_page_metadata.dart';
 import '../../../../core/utils/quran_surahs_metadata.dart';
+import '../../../settings/settings.dart';
 import '../bloc/quran_cubit.dart';
 import '../bloc/quran_state.dart';
 import '../widgets/mushaf_page_image.dart';
@@ -142,14 +144,17 @@ class _QuranReaderPageState extends State<QuranReaderPage> {
                   final pageNumber = state is QuranLoaded
                       ? state.currentPageNumber
                       : 1;
+                  final strings = AppStrings.of(context);
 
                   return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'المصحف الشريف',
+                        strings.quranReaderTitle,
                         style: theme.textTheme.titleLarge?.copyWith(
-                          color: isDark ? AppColors.goldLight : AppColors.emerald,
+                          color: isDark
+                              ? AppColors.goldLight
+                              : AppColors.emerald,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -160,14 +165,18 @@ class _QuranReaderPageState extends State<QuranReaderPage> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: (isDark ? AppColors.goldLight : AppColors.gold)
+                          color: (isDark
+                                  ? AppColors.goldLight
+                                  : AppColors.gold)
                               .withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'صفحة ${_toArabicDigits(pageNumber)}',
+                          strings.pageNumber(pageNumber),
                           style: theme.textTheme.labelSmall?.copyWith(
-                            color: isDark ? AppColors.goldLight : AppColors.goldDark,
+                            color: isDark
+                                ? AppColors.goldLight
+                                : AppColors.goldDark,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -220,6 +229,10 @@ class _QuranReaderPageState extends State<QuranReaderPage> {
                       child: _QuranPageView(
                         pageController: pageController,
                         loaded: state,
+                        useDarkParchment: context
+                            .select<AppSettingsCubit, bool>(
+                              (c) => c.state.mushafDarkBackground,
+                            ),
                         onPageChanged: (index) {
                           // Convert PageView index → Mushaf page number.
                           final pageNumber = index + 1;
@@ -264,15 +277,6 @@ class _QuranReaderPageState extends State<QuranReaderPage> {
         },
       ),
     );
-  }
-
-  /// Converts Western digits to Arabic-Indic digits for display.
-  String _toArabicDigits(int value) {
-    const arabic = '٠١٢٣٤٥٦٧٨٩';
-    return value.toString().split('').map((c) {
-      final d = int.parse(c);
-      return arabic[d];
-    }).join();
   }
 }
 
@@ -453,17 +457,24 @@ class _QuranPageView extends StatelessWidget {
     required this.pageController,
     required this.loaded,
     required this.onPageChanged,
+    this.useDarkParchment = false,
   });
 
   final PageController pageController;
   final QuranLoaded loaded;
   final ValueChanged<int> onPageChanged;
 
+  /// Whether the Mushaf page should use the dark parchment palette
+  /// (with a white tint overlay so the script stays visible).
+  final bool useDarkParchment;
+
   @override
   Widget build(BuildContext context) {
-    // Always use the light parchment backgrounds for the Mushaf pages.
-    // Dark backgrounds would make the transparent black text invisible.
+    // Light parchment palette (default).
     final backgrounds = AppColors.quranPageBackgrounds;
+
+    // Dark parchment palette designed for night reading.
+    final darkBackgrounds = AppColors.quranPageBackgroundsDark;
 
     // Use the saved page background preference (fall back to index 0).
     final bgIndex = (LocalStorageService.instance
@@ -472,7 +483,10 @@ class _QuranPageView extends StatelessWidget {
             0)
         .clamp(0, backgrounds.length - 1);
 
-    final backgroundColor = backgrounds[bgIndex];
+    // Choose the correct palette based on the user's Mushaf preference.
+    final backgroundColor = useDarkParchment
+        ? darkBackgrounds[bgIndex]
+        : backgrounds[bgIndex];
 
     return PageView.builder(
       controller: pageController,
@@ -489,11 +503,13 @@ class _QuranPageView extends StatelessWidget {
         // Mushaf page number = index + 1 (1–604).
         final pageNumber = index + 1;
 
-        // Render the official Medina Mushaf page image with a fixed
-        // light background (no zoom/pan — locked to full-screen).
+        // Render the official Medina Mushaf page image with the chosen
+        // background. When the dark parchment is active, a white overlay
+        // tint keeps the Uthmani script visible.
         return MushafPageImage(
           pageNumber: pageNumber,
           backgroundColor: backgroundColor,
+          useDarkParchment: useDarkParchment,
         );
       },
     );
@@ -508,6 +524,7 @@ class _QuranLoadingView extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = isDark ? AppColors.emeraldLight : AppColors.emerald;
+    final strings = AppStrings.of(context);
 
     return Center(
       child: Column(
@@ -530,7 +547,7 @@ class _QuranLoadingView extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'جاري تحميل المصحف الشريف...',
+            strings.quranLoading,
             style: Theme.of(context).textTheme.bodyLarge,
           ),
         ],

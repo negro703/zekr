@@ -5,6 +5,10 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Keeps the CPU awake so the alarm fires reliably in Doze mode / locked screen. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Required for fullScreenIntent heads-up popup on Android 14+ (revoked by default). -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
 
     <application
         android:label="zekr"

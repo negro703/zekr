@@ -25,8 +25,19 @@ class _MemoryStorage implements KeyValueStorage {
   }
 
   @override
-  bool? getBool(String key, {bool? defaultValue}) =>
-      _store[key] as bool? ?? defaultValue;
+  bool? getBool(String key, {bool? defaultValue}) {
+    final raw = _store[key];
+    if (raw is bool) return raw;
+    if (raw is String) {
+      // Mirrors LocalStorageService: coerce legacy string booleans.
+      final normalized = raw.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') return true;
+      if (normalized == 'false' || normalized == '0') return false;
+    } else if (raw is int) {
+      return raw != 0;
+    }
+    return defaultValue;
+  }
 
   @override
   Future<void> setBool(String key, bool value) async {
@@ -212,6 +223,56 @@ void main() {
       final loaded = cubit.state as NotificationsLoaded;
       expect(loaded.preferences.morningHour, 7);
       expect(loaded.preferences.morningMinute, 30);
+
+      cubit.close();
+    });
+
+    // ─── Regression: String-under-bool-key crash ──────────────────────────────
+    // Previously `getBool` did `_store[key] as bool?`, which threw
+    // `type 'String' is not a subtype of type 'bool?'` when a legacy
+    // String value (e.g. "true"/"false") was stored under a boolean
+    // preference key. These tests lock in the defensive coercion.
+
+    test('loadPreferences tolerates legacy String "true" under bool key',
+        () async {
+      storage.setString(AppConstants.morningAzkarEnabledPrefKey, 'true');
+      storage.setString(AppConstants.eveningAzkarEnabledPrefKey, 'false');
+      storage.setString(AppConstants.salawatEnabledPrefKey, '1');
+
+      final cubit = buildCubit();
+      await cubit.loadPreferences();
+
+      final loaded = cubit.state as NotificationsLoaded;
+      expect(loaded.preferences.morningEnabled, isTrue);
+      expect(loaded.preferences.eveningEnabled, isFalse);
+      expect(loaded.preferences.salawatEnabled, isTrue);
+
+      cubit.close();
+    });
+
+    test('loadPreferences tolerates legacy int 1/0 under bool key', () async {
+      storage.setInt(AppConstants.morningAzkarEnabledPrefKey, 1);
+      storage.setInt(AppConstants.eveningAzkarEnabledPrefKey, 0);
+
+      final cubit = buildCubit();
+      await cubit.loadPreferences();
+
+      final loaded = cubit.state as NotificationsLoaded;
+      expect(loaded.preferences.morningEnabled, isTrue);
+      expect(loaded.preferences.eveningEnabled, isFalse);
+
+      cubit.close();
+    });
+
+    test('loadPreferences falls back to default for unrecognized String',
+        () async {
+      storage.setString(AppConstants.morningAzkarEnabledPrefKey, 'maybe');
+
+      final cubit = buildCubit();
+      await cubit.loadPreferences();
+
+      final loaded = cubit.state as NotificationsLoaded;
+      expect(loaded.preferences.morningEnabled, isFalse);
 
       cubit.close();
     });

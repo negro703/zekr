@@ -19,7 +19,10 @@ class QuranCubit extends Cubit<QuranState> {
     required this.repository,
     KeyValueStorage? keyValueStorage,
   })  : keyValueStorage = keyValueStorage ?? LocalStorageService.instance,
-        super(const QuranInitial());
+        // Start in the loading state synchronously so the reader page
+        // renders the loading indicator on the very first frame without
+        // waiting for an async emission.
+        super(const QuranLoading());
 
   /// The repository used to load Quran pages.
   final QuranRepository repository;

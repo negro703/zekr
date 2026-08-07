@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zekr/core/core.dart';
 import 'package:zekr/features/quran/quran.dart';
+import 'package:zekr/features/settings/settings.dart';
 
 /// In-memory [KeyValueStorage] for testing without platform plugins.
 class _MemoryKeyValueStorage implements KeyValueStorage {
@@ -43,6 +44,10 @@ class _MemoryKeyValueStorage implements KeyValueStorage {
 }
 
 /// Fake repository for testing without real asset I/O.
+///
+/// The repository returns immediately (matching the offline-first local
+/// asset loading in production) so the reader resolves to the loaded
+/// state as fast as possible — no artificial delays.
 class _FakeQuranRepository implements QuranRepository {
   _FakeQuranRepository({
     required this.pages,
@@ -107,21 +112,30 @@ QuranPageModel _buildPage(int pageNumber, {int juzNumber = 1}) {
   );
 }
 
-/// Wrapper that provides the cubit to the reader page.
+/// Wrapper that provides the cubit and settings to the reader page.
 Widget _wrap({
   required QuranCubit cubit,
+  required KeyValueStorage storage,
   required Widget child,
 }) {
   return MaterialApp(
     locale: const Locale('ar'),
     supportedLocales: const [Locale('ar')],
     localizationsDelegates: const [
+      AppStringsDelegate(),
       GlobalMaterialLocalizations.delegate,
       GlobalWidgetsLocalizations.delegate,
       GlobalCupertinoLocalizations.delegate,
     ],
-    home: BlocProvider<QuranCubit>(
-      create: (_) => cubit,
+    home: MultiBlocProvider(
+      providers: [
+        BlocProvider<QuranCubit>(
+          create: (_) => cubit,
+        ),
+        BlocProvider<AppSettingsCubit>(
+          create: (_) => AppSettingsCubit(keyValueStorage: storage),
+        ),
+      ],
       child: child,
     ),
   );
@@ -172,19 +186,21 @@ void main() {
   });
 
   group('QuranReaderPage', () {
-    testWidgets('displays loading then loaded page', (tester) async {
+    testWidgets('renders loaded Mushaf page immediately', (tester) async {
       final pages = [_buildPage(1), _buildPage(2)];
       final cubit = QuranCubit(
         repository: _FakeQuranRepository(pages: pages, totalPages: 2),
         keyValueStorage: storage,
       );
 
-      await tester.pumpWidget(_wrap(cubit: cubit, child: const QuranReaderPage()));
+      await tester.pumpWidget(_wrap(
+        cubit: cubit,
+        storage: storage,
+        child: const QuranReaderPage(),
+      ));
 
-      // Initial frame shows loading.
-      expect(find.text('جاري تحميل المصحف الشريف...'), findsOneWidget);
-
-      // Wait for async load to complete.
+      // Offline-first local loading resolves instantly — the loaded
+      // Mushaf pages are visible without any artificial delays.
       await tester.pumpAndSettle();
 
       // Loaded state shows the image-based Mushaf page.
@@ -210,7 +226,11 @@ void main() {
         keyValueStorage: storage,
       );
 
-      await tester.pumpWidget(_wrap(cubit: cubit, child: const QuranReaderPage()));
+      await tester.pumpWidget(_wrap(
+        cubit: cubit,
+        storage: storage,
+        child: const QuranReaderPage(),
+      ));
 
       await tester.pumpAndSettle();
 
@@ -228,7 +248,11 @@ void main() {
         keyValueStorage: storage,
       );
 
-      await tester.pumpWidget(_wrap(cubit: cubit, child: const QuranReaderPage()));
+      await tester.pumpWidget(_wrap(
+        cubit: cubit,
+        storage: storage,
+        child: const QuranReaderPage(),
+      ));
       await tester.pumpAndSettle();
 
       // Open the drawer via the menu icon.
@@ -254,7 +278,11 @@ void main() {
         keyValueStorage: storage,
       );
 
-      await tester.pumpWidget(_wrap(cubit: cubit, child: const QuranReaderPage()));
+      await tester.pumpWidget(_wrap(
+        cubit: cubit,
+        storage: storage,
+        child: const QuranReaderPage(),
+      ));
       await tester.pumpAndSettle();
 
       // Open drawer.
@@ -279,7 +307,11 @@ void main() {
         keyValueStorage: storage,
       );
 
-      await tester.pumpWidget(_wrap(cubit: cubit, child: const QuranReaderPage()));
+      await tester.pumpWidget(_wrap(
+        cubit: cubit,
+        storage: storage,
+        child: const QuranReaderPage(),
+      ));
       await tester.pumpAndSettle();
 
       // Open drawer, then scroll to and tap "الصفحات".
@@ -309,7 +341,11 @@ void main() {
         keyValueStorage: storage,
       );
 
-      await tester.pumpWidget(_wrap(cubit: cubit, child: const QuranReaderPage()));
+      await tester.pumpWidget(_wrap(
+        cubit: cubit,
+        storage: storage,
+        child: const QuranReaderPage(),
+      ));
 
       // Wait for the async load and the PageView to attach.
       await tester.pumpAndSettle();
@@ -335,7 +371,11 @@ void main() {
         keyValueStorage: storage,
       );
 
-      await tester.pumpWidget(_wrap(cubit: cubit, child: const QuranReaderPage()));
+      await tester.pumpWidget(_wrap(
+        cubit: cubit,
+        storage: storage,
+        child: const QuranReaderPage(),
+      ));
       await tester.pumpAndSettle();
 
       // No saved page → reader must start at page 1.

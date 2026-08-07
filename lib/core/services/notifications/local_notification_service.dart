@@ -16,6 +16,11 @@ import 'notification_scheduler.dart';
 /// reliably even when the app is closed, in the background, or the device
 /// screen is locked. Notifications include sound, vibration, and
 /// heads-up popup behavior.
+///
+/// On Android 13+ the `SCHEDULE_EXACT_ALARM` permission must be granted by
+/// the user at runtime; on Android 14+ the `USE_FULL_SCREEN_INTENT`
+/// permission is revoked by default for non-calling/alarm apps. Both are
+/// requested here so exact alarms and heads-up popups work on locked screens.
 class LocalNotificationService implements NotificationScheduler {
   LocalNotificationService._internal();
 
@@ -83,6 +88,12 @@ class LocalNotificationService implements NotificationScheduler {
   }
 
   /// Requests notification permissions from the user.
+  ///
+  /// On Android this also requests:
+  /// - `POST_NOTIFICATIONS` (Android 13+)
+  /// - `SCHEDULE_EXACT_ALARM` (Android 13+ — required for exact alarms)
+  /// - `USE_FULL_SCREEN_INTENT` (Android 14+ — required for heads-up popup
+  ///   on locked screens)
   Future<bool> requestPermissions() async {
     if (!_isInitialized) return false;
 
@@ -97,6 +108,22 @@ class LocalNotificationService implements NotificationScheduler {
         await ios?.requestPermissions(alert: true, badge: true, sound: true) ??
             true;
 
+    // Request exact alarm permission (Android 13+). This is required for
+    // `exactAllowWhileIdle` to work. Best-effort; never blocks.
+    try {
+      await android?.requestExactAlarmsPermission();
+    } catch (_) {
+      // Non-fatal — scheduling will fall back to inexact.
+    }
+
+    // Request full-screen intent permission (Android 14+). Required for
+    // `fullScreenIntent: true` heads-up popups on locked screens.
+    try {
+      await android?.requestFullScreenIntentPermission();
+    } catch (_) {
+      // Non-fatal — notification still shows in the shade.
+    }
+
     _permissionsGranted = androidGranted && iosGranted;
     return _permissionsGranted;
   }
@@ -109,6 +136,10 @@ class LocalNotificationService implements NotificationScheduler {
   /// fires at the precise time even when the device is in Doze mode or
   /// the screen is locked. The channel is configured with high importance
   /// and sound so it appears as a heads-up popup.
+  ///
+  /// If exact alarms are not permitted (e.g. the user denied the
+  /// `SCHEDULE_EXACT_ALARM` permission on Android 13+), it gracefully
+  /// falls back to `inexactAllowWhileIdle` rather than failing silently.
   @override
   Future<void> scheduleDaily({
     required int id,
@@ -141,12 +172,14 @@ class LocalNotificationService implements NotificationScheduler {
       ),
     );
 
+    final scheduledDate = _nextInstanceOf(hour, minute);
+
     try {
       await _plugin.zonedSchedule(
         id,
         title,
         body,
-        _nextInstanceOf(hour, minute),
+        scheduledDate,
         details,
         // Exact alarm fires reliably even in Doze mode / screen locked.
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -159,7 +192,7 @@ class LocalNotificationService implements NotificationScheduler {
           id,
           title,
           body,
-          _nextInstanceOf(hour, minute),
+          scheduledDate,
           details,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           matchDateTimeComponents: DateTimeComponents.time,
@@ -175,9 +208,13 @@ class LocalNotificationService implements NotificationScheduler {
 
   /// Schedules a periodic interval notification for Salawat reminders.
   ///
-  /// Uses `zonedSchedule` with `matchDateTimeComponents` for intervals
-  /// that map to a supported repeat (hourly/daily/weekly). For sub-hour
-  /// intervals, it schedules a repeating exact alarm every N minutes.
+  /// Uses `periodicallyShowWithDuration` which accepts an arbitrary
+  /// [Duration] interval (e.g. every 5, 15, 30 minutes) and schedules an
+  /// exact repeating alarm. This is the correct method for sub-hour
+  /// intervals — `periodicallyShow` only supports fixed hourly/daily/weekly
+  /// repeats and would silently round sub-hour intervals up to an hour.
+  ///
+  /// Falls back to `inexactAllowWhileIdle` if exact alarms are not permitted.
   @override
   Future<void> schedulePeriodic({
     required int id,
@@ -210,26 +247,22 @@ class LocalNotificationService implements NotificationScheduler {
     );
 
     try {
-      // For intervals that map to a supported RepeatInterval, use
-      // periodicallyShow with exact scheduling.
-      final repeatInterval = _mapInterval(interval);
-      await _plugin.periodicallyShow(
+      await _plugin.periodicallyShowWithDuration(
         id,
         title,
         body,
-        repeatInterval,
+        interval,
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
     } catch (e) {
       // Fall back to inexact scheduling if exact alarms are not permitted.
       try {
-        final repeatInterval = _mapInterval(interval);
-        await _plugin.periodicallyShow(
+        await _plugin.periodicallyShowWithDuration(
           id,
           title,
           body,
-          repeatInterval,
+          interval,
           details,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         );
@@ -253,20 +286,75 @@ class LocalNotificationService implements NotificationScheduler {
     await _plugin.cancelAll();
   }
 
-  // ─── Helpers ────────────────────────────────────────────────────────────────
+  // ─── Debugging / Test Method ────────────────────────────────────────────────
 
-  /// Maps a [Duration] to the closest supported [RepeatInterval].
+  /// Shows a test notification immediately after [delay] (default 5 seconds).
   ///
-  /// The plugin supports: every minute, hourly, daily, and weekly.
-  /// Hour-based intervals (the app's Salawat use case) map to hourly;
-  /// day/week-scale intervals map to daily/weekly respectively.
-  RepeatInterval _mapInterval(Duration interval) {
-    final hours = interval.inHours;
-    if (hours <= 0) return RepeatInterval.hourly;
-    if (hours < 24) return RepeatInterval.hourly;
-    if (hours < 24 * 7) return RepeatInterval.daily;
-    return RepeatInterval.weekly;
+  /// Use this to verify the notification pipeline works locally:
+  /// - Call it from a button press or app startup.
+  /// - If it appears, the channel, sound, vibration, and heads-up popup
+  ///   are all working.
+  /// - Then verify the recurring scheduler by enabling a reminder and
+  ///   checking it fires at the scheduled time with the app closed/locked.
+  ///
+  /// Returns the notification id used (so callers can cancel it later).
+  Future<int> showTestNotification({
+    String title = '🔔 اختبار الإشعارات',
+    String body = 'إذا رأيت هذا الإشعار، فإن نظام الإشعارات يعمل بشكل صحيح ✅',
+    Duration delay = const Duration(seconds: 5),
+  }) async {
+    if (!_isInitialized) return -1;
+
+    const testId = 999999;
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'test_channel',
+        'قناة الاختبار',
+        channelDescription: 'قناة اختبار الإشعارات',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        category: AndroidNotificationCategory.reminder,
+        visibility: NotificationVisibility.public,
+        fullScreenIntent: true,
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
+    );
+
+    final scheduledDate = tz.TZDateTime.now(tz.local).add(delay);
+
+    try {
+      await _plugin.zonedSchedule(
+        testId,
+        title,
+        body,
+        scheduledDate,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } catch (_) {
+      // Fall back to inexact if exact alarms are not permitted.
+      await _plugin.zonedSchedule(
+        testId,
+        title,
+        body,
+        scheduledDate,
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    }
+
+    return testId;
   }
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
 
   /// Returns the next matching [hour]:[minute] in the local timezone.
   tz.TZDateTime _nextInstanceOf(int hour, int minute) {

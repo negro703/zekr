@@ -126,10 +126,10 @@ void main() {
   }
 
   group('QuranCubit', () {
-    test('initial state is QuranInitial', () {
+    test('initial state is QuranLoading', () {
       final cubit = buildCubit();
 
-      expect(cubit.state, isA<QuranInitial>());
+      expect(cubit.state, isA<QuranLoading>());
       expect(cubit.currentPageIndex, 0);
 
       cubit.close();

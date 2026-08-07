@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/localization/localization.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/theme/theme.dart';
 import '../../../azkar/azkar.dart';
 import '../../../notifications/notifications.dart';
 import '../../../quran/quran.dart';
 import '../../../sebha/sebha.dart';
+import '../../../settings/settings.dart';
 
 /// Main navigation shell for the Zekr app.
 ///
 /// Provides a bottom navigation bar to switch between:
-/// - القرآن (Quran Reader)
-/// - الأذكار (Azkar)
-/// - السبحة (Sebha)
-/// - الإعدادات (Settings / Notifications)
+/// - القرآن / Quran Reader
+/// - الأذكار / Azkar
+/// - السبحة / Sebha
+/// - الإعدادات / Settings
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -48,10 +50,10 @@ class _HomePageState extends State<HomePage> {
         ),
         child: const SebhaPage(),
       ),
-      // Notifications Settings
+      // Settings (language, theme, reminders)
       BlocProvider(
         create: (_) => NotificationsCubit(),
-        child: const NotificationsSettingsPage(),
+        child: const SettingsPage(),
       ),
     ];
   }
@@ -67,33 +69,39 @@ class _HomePageState extends State<HomePage> {
         index: _currentIndex,
         children: _pages,
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() => _currentIndex = index);
+      bottomNavigationBar: BlocBuilder<AppSettingsCubit, AppSettings>(
+        buildWhen: (prev, cur) => prev.language != cur.language,
+        builder: (context, settings) {
+          final strings = AppStrings.of(context);
+          return NavigationBar(
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (index) {
+              setState(() => _currentIndex = index);
+            },
+            destinations: [
+              NavigationDestination(
+                icon: const Icon(Icons.menu_book_outlined),
+                selectedIcon: Icon(Icons.menu_book, color: primaryColor),
+                label: strings.navQuran,
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.auto_awesome_outlined),
+                selectedIcon: Icon(Icons.auto_awesome, color: primaryColor),
+                label: strings.navAzkar,
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.touch_app_outlined),
+                selectedIcon: Icon(Icons.touch_app, color: primaryColor),
+                label: strings.navSebha,
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings, color: primaryColor),
+                label: strings.navSettings,
+              ),
+            ],
+          );
         },
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.menu_book_outlined),
-            selectedIcon: Icon(Icons.menu_book, color: primaryColor),
-            label: 'القرآن',
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome, color: primaryColor),
-            label: 'الأذكار',
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.touch_app_outlined),
-            selectedIcon: Icon(Icons.touch_app, color: primaryColor),
-            label: 'السبحة',
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings, color: primaryColor),
-            label: 'الإعدادات',
-          ),
-        ],
       ),
     );
   }

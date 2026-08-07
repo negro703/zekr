@@ -9,7 +9,7 @@ abstract final class AppConstants {
       'تطبيق إسلامي شامل للقرآن الكريم والأذكار والسبحة';
 
   // ─── Localization ────────────────────────────────────────────────────────────
-  /// The app is Arabic-first and forces RTL layout globally.
+  /// The app defaults to Arabic and supports English.
   static const Locale defaultLocale = Locale('ar');
   static const List<Locale> supportedLocales = [
     Locale('ar'),
@@ -18,8 +18,10 @@ abstract final class AppConstants {
 
   // ─── Storage Keys ────────────────────────────────────────────────────────────
   static const String themeModePrefKey = 'theme_mode';
+  static const String languagePrefKey = 'app_language';
   static const String fontSizePrefKey = 'font_size';
   static const String quranPageBackgroundPrefKey = 'quran_page_background';
+  static const String quranMushafDarkPrefKey = 'quran_mushaf_dark';
   static const String lastReadPagePrefKey = 'last_read_page';
   static const String lastReadSurahPrefKey = 'last_read_surah';
   static const String lastReadAyahPrefKey = 'last_read_ayah';

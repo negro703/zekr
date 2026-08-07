@@ -60,9 +60,31 @@ class LocalStorageService implements KeyValueStorage {
       _prefs?.setInt(key, value) ?? Future.value();
 
   /// Reads a [bool] setting by [key], or [defaultValue] if absent.
+  ///
+  /// Type-safe: never throws a cast exception. SharedPreferences stores
+  /// values in a heterogeneous map, and a legacy/foreign value (e.g. a
+  /// `String` like `"true"`/`"false"`/`"1"`/`"0"`, or an `int` `1`/`0`)
+  /// may exist under a key that is now read as a boolean. This parser
+  /// coerces those values instead of crashing with
+  /// `type 'String' is not a subtype of type 'bool?'`.
   @override
-  bool? getBool(String key, {bool? defaultValue}) =>
-      _prefs?.getBool(key) ?? defaultValue;
+  bool? getBool(String key, {bool? defaultValue}) {
+    final prefs = _prefs;
+    if (prefs == null) return defaultValue;
+
+    final raw = prefs.get(key);
+    if (raw is bool) return raw;
+    if (raw is String) {
+      // Legacy string-encoded booleans: "true"/"false"/"1"/"0".
+      final normalized = raw.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') return true;
+      if (normalized == 'false' || normalized == '0') return false;
+    } else if (raw is int) {
+      // Legacy int-encoded booleans: 1/0.
+      return raw != 0;
+    }
+    return defaultValue;
+  }
 
   /// Writes a [bool] setting by [key].
   @override
