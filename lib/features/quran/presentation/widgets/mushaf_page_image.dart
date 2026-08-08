@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/theme.dart';
 
-/// Renders a single Medina Mushaf page image (001.png – 604.png).
+/// Renders a single Medina Mushaf page image (001.webp – 604.webp).
 ///
-/// The page image is a transparent PNG with black Uthmani-script text.
+/// The page image is a transparent WebP with black Uthmani-script text.
 /// In light mode it is rendered on a parchment background exactly as-is.
 /// In dark mode the widget supports two strategies:
 /// 1. **Mushaf-friendly dark background** ([useDarkParchment] = true):
@@ -31,10 +31,10 @@ class MushafPageImage extends StatefulWidget {
   /// so the transparent text stays visible on a darkened page.
   final bool useDarkParchment;
 
-  /// Builds the asset path for [pageNumber], e.g. `assets/pages/001.png`.
+  /// Builds the asset path for [pageNumber], e.g. `assets/pages/001.webp`.
   static String assetPathFor(int pageNumber) {
     final padded = pageNumber.toString().padLeft(3, '0');
-    return 'assets/pages/$padded.png';
+    return 'assets/pages/$padded.webp';
   }
 
   @override

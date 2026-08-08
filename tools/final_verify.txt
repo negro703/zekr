@@ -1,6 +1,0 @@
-Android label has Arabic word: True
-iOS CFBundleDisplayName has Arabic word: True
-app_icon_1024.png -> (1024, 1024) RGBA 172613 bytes
-splash_portrait_1080x1920.png -> (1080, 1920) RGBA 275330 bytes
-splash_landscape_1920x1080.png -> (1920, 1080) RGBA 270585 bytes
-BRAND_IDENTITY.md exists: True
